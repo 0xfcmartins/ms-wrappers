@@ -21,15 +21,14 @@ contextBridge.exposeInMainWorld(
     }
 );
 
-contextBridge.exposeInMainWorld("electronAPI", {
-    getMediaDevicePermissions: async () => {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({audio: true});
-            stream.getTracks().forEach(track => track.stop()); // to free device immediately after checking
-            return true;
-        } catch (error) {
-            console.error('Error accessing microphone:', error);
-            return false;
-        }
+contextBridge.exposeInMainWorld('electronAPI', {
+    // Allow sending notifications from renderer to main process
+    sendNotification: (title, body) => {
+        ipcRenderer.send('new-notification', { title, body });
+    },
+
+    // For badge count updates
+    updateBadgeCount: (count) => {
+        ipcRenderer.send('update-badge-count', count);
     }
 });

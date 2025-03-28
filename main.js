@@ -131,28 +131,40 @@ if (!gotTheLock) {
         });
     });
 
-    ipcMain.on("new-notification", (event, {title, body}) => {
+    // Add this where you create notifications in your app
+// (likely in response to the 'new-notification' IPC event)
+
+    function createNotification(title, body) {
         const notification = new Notification({
             title: title,
             body: body,
-            icon: path.resolve(__dirname, 'teams.png'),
-            silent: false
+            silent: false,
+            // Add an icon if you have one
+            icon: path.join(__dirname, 'teams.png')
+        });
+
+        notification.on('click', () => {
+            // Make sure window is visible and focused when notification is clicked
+            if (mainWindow) {
+                if (mainWindow.isMinimized()) mainWindow.restore();
+                if (!mainWindow.isVisible()) mainWindow.show();
+                mainWindow.focus();
+
+                // If we were flashing the frame, stop when notification is clicked
+                if (process.platform === 'win32') {
+                    mainWindow.flashFrame(false);
+                }
+            }
         });
 
         notification.show();
+    }
 
-        notification.on('click', () => {
-            if (mainWindow.isMinimized()) {
-                mainWindow.restore();  // Restore if minimized
-            }
-
-            if (!mainWindow.isVisible()) {
-                mainWindow.show();     // Show if hidden
-            }
-
-            mainWindow.focus();        // Bring to foreground
-        });
+// Add this IPC handler in your main.js where other event listeners are defined
+    ipcMain.on('new-notification', (event, notificationData) => {
+        createNotification(notificationData.title, notificationData.body);
     });
+
 
     ipcMain.on("update-badge-count", (event, count) => {
         updateTray(count);
@@ -177,3 +189,20 @@ if (!gotTheLock) {
         if (process.platform !== "darwin") app.quit();
     });
 }
+function testNotification() {
+    createNotification('Test Notification', 'Click me to open the app!');
+}
+
+// You could add a global shortcut to test it
+app.whenReady().then(() => {
+    // Your existing code...
+
+    // Optional: Add a shortcut for testing notifications
+    // Uncomment this if needed
+
+    const { globalShortcut } = require('electron');
+    globalShortcut.register('CommandOrControl+Shift+N', () => {
+      testNotification();
+    });
+
+});
