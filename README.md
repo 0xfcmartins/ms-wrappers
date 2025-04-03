@@ -1,46 +1,85 @@
-# Teams for Linux
-## Overview
-Teams Wrapper is an Electron-based application that provides a desktop wrapper for Microsoft Teams with notification badge support. It allows you to use Microsoft Teams as a standalone desktop application on Linux systems.
+# Web Wrappers
+**Unofficial Electron wrappers for web applications, built for Linux desktop.**
+## Description
+This project provides Electron-based desktop applications that wrap web services, making them feel more like native applications. Currently, it includes wrappers for:
+- Microsoft Teams
+- Outlook
+
+Each wrapper has its own configuration and can be built and run independently.
 ## Features
-- Microsoft Teams as a standalone desktop application
-- System tray integration with notification badge
-- Custom window management
-- Native desktop notifications
+- Clean desktop integration with application icons
+- Window state persistence (position and size)
+- Snap package generation for easy installation on Linux systems
+- Development mode for quick testing
+
+## Requirements
+- Node.js and npm
+- Electron
+- Snapcraft (for building snap packages)
 
 ## Installation
-### Prerequisites
-- Node.js and npm installed
-
-### Install Dependencies
+Clone the repository and install dependencies:
 ``` bash
+    git clone https://github.com/0xfcmartins/teams-ew.git
+    cd teams-ew
     npm install
 ```
-## Usage
-### Development
-To run the application in development mode:
+## Available Scripts
+### Development Mode
+Run applications in development mode for testing:
 ``` bash
-    npm start
+    # Run Teams
+    npm run dev:teams
+    
+    # Run Outlook
+    npm run dev:outlook
 ```
-### Building
-To build a Debian package:
+### Building Applications
+Build the applications for distribution:
 ``` bash
-    npm run build
+    # Build Teams
+    npm run build:teams
+    
+    # Build Outlook
+    npm run build:outlook
 ```
-To build all supported Linux formats (Debian and AppImage):
+The build process will create:
+- Debian package (.deb)
+- AppImage
+- Snap package
+
+### Running Built Applications
+Run the applications directly using Electron:
 ``` bash
-    npm run build:all
+    # Run Teams
+    npm run run:teams
+    
+    # Run Outlook
+    npm run run:outlook
 ```
 ## Project Structure
-- `main.js`: Main application entry point
-- `index.js`: Tray window configuration and management
-- `package.json`: Project configuration and dependencies
-
-## Technologies
-- Electron 35.1.2
-- electron-tray-window 1.2.7
-- electron-builder 24.6.4
-
+``` 
+    .
+    ├── apps/                   # App-specific configurations
+    │   ├── teams/             # Teams app files
+    │   │   ├── config.json    # App-specific config
+    │   │   ├── package.json   # App-specific package info
+    │   │   └── icons/         # App icons
+    │   └── outlook/           # Outlook app files
+    ├── src/                    # Source code for the Electron app
+    │   ├── main/              # Main process code
+    │   ├── preload/           # Preload scripts
+    │   └── main.js            # Entry point
+    ├── build.js               # Build script
+    ├── dev-run.js             # Development runner script
+    └── snapcraft.yaml.template # Template for Snap packaging
+```
+## Building Snap Packages
+The project automatically generates snap packages during the build process. It uses the template specified in `snapcraft.yaml.template` and creates a customized version for each application based on its configuration.
 ## License
-This project is licensed under the MIT License.
+MIT
 ## Author
-Francisco Martins <fcmartins@portoeditora.pt>
+Francisco Martins <francisco_jcm_7@hotmail.com>
+## Contributing
+Contributions are welcome! Please feel free to submit a Pull Request.
+For more information, visit the [GitHub repository](https://github.com/0xfcmartins/teams-ew).

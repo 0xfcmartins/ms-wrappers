@@ -1,0 +1,17 @@
+{
+  "name": "Microsoft Teams",
+  "url": "https://teams.microsoft.com",
+  "iconFile": "icon.png",
+  "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+  "windowOptions": {
+    "width": 1200,
+    "height": 900,
+    "minWidth": 800,
+    "minHeight": 600
+  },
+  "permissions": ["notifications", "media"],
+  "snapName": "teams-ew",
+  "snapDescription": "Microsoft Teams web wrapper for Linux",
+  "desktopName": "Microsoft Teams",
+  "desktopCategories": "Network;InstantMessaging;"
+}

@@ -1,31 +1,23 @@
 {
-  "name": "teams-wrapper",
+  "name": "web-wrappers",
   "version": "1.0.0",
-  "description": "Microsoft Teams Electron wrapper with notification badge",
-  "main": "main.js",
-  "homepage": "https://github.com/fcmartins/teams-wrapper",
+  "description": "Unofficial Electron wrapper for Microsoft Teams, built for Linux desktop.",
+  "main": "Build.js",
+  "homepage": "https://github.com/0xfcmartins/teams-ew",
   "scripts": {
-    "start": "electron .",
-    "build": "electron-builder --linux deb",
-    "build:all": "electron-builder --linux"
-  },
-  "author": {
-    "name": "Francisco Martins",
-    "email": "fcmartins@portoeditora.pt"
-  },
-  "license": "MIT",
-  "devDependencies": {
-    "electron": "35.1.2",
-    "electron-builder": "^24.6.4"
-  },
-  "dependencies": {
-    "electron-tray-window": "1.2.7"
+    "run:teams": "npx electron /apps/teams",
+    "run:outlook": "npx electron /apps/outlook",
+    "build:teams": "node build.js teams",
+    "build:outlook": "node build.js outlook",
+    "dev:teams": "node dev-run.js teams",
+    "dev:outlook": "node dev-run.js outlook"
   },
   "build": {
-    "appId": "pt.fcmartins.teams-wrapper",
-    "productName": "teams-wrapper",
+    "appId": "pt.fcmartins.teams-ew",
+    "license": "MIT",
+    "productName": "Teams EW",
     "files": [
-      "**/*",
+      "src/**/*",
       "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
       "!**/node_modules/*/{test,__tests__,tests,powered-test,example,examples}",
       "!**/node_modules/*.d.ts",
@@ -41,18 +33,24 @@
     "linux": {
       "target": [
         "deb",
-        "AppImage"
+        "AppImage",
+        "snap"
       ],
       "category": "Office",
-      "icon": "build/icons",
-      "maintainer": "Francisco Martins <fcmartins@portoeditora.pt>",
-      "executableName": "teams-wrapper",
+      "icon": "build/icons/icon.png",
+      "maintainer": "Francisco Martins <francisco_jcm_7@hotmail.com>",
+      "executableName": "teams-ew",
       "desktop": {
-        "Name": "Microsoft Teams",
-        "Comment": "Microsoft Teams for Linux",
-        "Categories": "Office;Network;InstantMessaging",
-        "StartupWMClass": "teams-wrapper"
+        "path": "build/linux/teams-ew.desktop"
       }
     }
+  },
+  "devDependencies": {
+    "electron": "^35.1.3",
+    "electron-builder": "^26.0.12",
+    "eslint": "^9.23.0"
+  },
+  "dependencies": {
+    "electron-window-state": "^5.0.3"
   }
 }
