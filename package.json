@@ -15,7 +15,7 @@
   "build": {
     "appId": "pt.fcmartins.teams-ew",
     "license": "MIT",
-    "productName": "Teams EW",
+    "productName": "Linux PWA Wrappers",
     "files": [
       "src/**/*",
       "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
@@ -37,12 +37,7 @@
         "snap"
       ],
       "category": "Office",
-      "icon": "build/icons/icon.png",
-      "maintainer": "Francisco Martins <francisco_jcm_7@hotmail.com>",
-      "executableName": "teams-ew",
-      "desktop": {
-        "path": "build/linux/teams-ew.desktop"
-      }
+      "maintainer": "Francisco Martins <francisco_jcm_7@hotmail.com>"
     }
   },
   "devDependencies": {

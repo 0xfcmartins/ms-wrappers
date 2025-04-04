@@ -3,7 +3,8 @@
  * @typedef {Object} AppConfig
  * @property {string} name - The application name displayed in UI elements and window title
  * @property {string} url - The web URL that the application will load
- * @property {string} iconFile - The filename of the icon used for the application window and tray
+ * @property {string} iconFile - The filename of the icon used for the application window
+ * @property {string} trayIconFile - The filename of the icon used for the application tray
  * @property {string} userAgent - Custom user agent string to use for web requests
  * @property {Object} windowOptions - Configuration options for the application window
  * @property {number} windowOptions.width - Initial window width in pixels
@@ -26,6 +27,7 @@ const {setupTray} = require('./main/tray');
 const {setupNotifications} = require('./main/notification');
 
 const icon = path.join(__dirname, 'icons', appConfig.iconFile);
+const trayIcon = path.join(__dirname, 'icons', appConfig.trayIconFile);
 
 app.name = appConfig.name;
 
@@ -136,7 +138,7 @@ if (!gotTheLock) {
 
     await setupTray(mainWindow, {
       name: appConfig.name,
-      iconPath: icon
+      iconPath: trayIcon
     });
 
     setupNotifications(mainWindow);

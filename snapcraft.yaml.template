@@ -23,6 +23,7 @@ apps:
         - audio-playback
         - audio-record
         - desktop
+        - desktop-legacy
         - home
         - removable-media
         - opengl
@@ -32,31 +33,6 @@ parts:
   application:
     plugin: dump
     source: .
-    override-build: |
-      npm install
-      
-      mkdir -p $SNAPCRAFT_PART_INSTALL/app
-      cp -r * $SNAPCRAFT_PART_INSTALL/app
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/share/applications
-      
-      cat > $SNAPCRAFT_PART_INSTALL/usr/share/applications/{{APP_NAME}}.desktop << EOF
-      [Desktop Entry]
-      Name={{DESKTOP_NAME}}
-      Exec={{APP_NAME}}
-      Icon=${SNAP}/app/icons/icon.png
-      Terminal=false
-      Type=Application
-      Categories={{DESKTOP_CATEGORIES}}
-      EOF
-      
-      mkdir -p $SNAPCRAFT_PART_INSTALL/meta/gui/
-      
-      if [ -f "build/icons/icon.png" ]; then
-        cp build/icons/icon.png $SNAPCRAFT_PART_INSTALL/meta/gui/{{APP_NAME}}.png
-      elif [ -f "icons/icon.png" ]; then
-        cp icons/icon.png $SNAPCRAFT_PART_INSTALL/meta/gui/{{APP_NAME}}.png
-      fi
-
     build-packages:
       - npm
     stage-packages:

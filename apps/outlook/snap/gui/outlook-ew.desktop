@@ -1,0 +1,11 @@
+[Desktop Entry]
+X-SnapInstanceName=outlook-ew
+Name=Microsoft Outlook
+X-SnapAppName=outlook-ew
+Exec=teams-ew
+Terminal=false
+Type=Application
+Icon=${SNAP}/meta/gui/outlook-ew.png
+StartupWMClass=outlook-ew
+Comment=Unofficial Electron wrapper for Microsoft Outlook, built for Linux desktop.
+Categories=Network;Office;Email;

@@ -17,6 +17,7 @@ if (!fs.existsSync(buildDir)) {
 
 execSync(`cp -r ${path.join(__dirname, 'src')}/* ${buildDir}`);
 execSync(`cp -r ${path.join(appDir, 'icons')} ${buildDir}`);
+execSync(`cp -r ${path.join(appDir, 'snap')} ${buildDir}`);
 
 const config = JSON.parse(fs.readFileSync(path.join(appDir, 'config.json'), 'utf8'));
 fs.writeFileSync(path.join(buildDir, 'app-config.json'), JSON.stringify(config, null, 2));

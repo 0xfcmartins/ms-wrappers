@@ -2,6 +2,7 @@
   "name": "Microsoft Outlook",
   "url": "https://outlook.office.com/mail/",
   "iconFile": "icon.png",
+  "trayIconFile": "tray.png",
   "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
   "windowOptions": {
     "width": 1200,
