@@ -1,4 +1,4 @@
-const {Tray, Menu, app} = require('electron');
+const {Tray, Menu, app, Notification} = require('electron');
 
 /**
  * Sets up the system tray with a custom icon, menu, and click behavior for the application.

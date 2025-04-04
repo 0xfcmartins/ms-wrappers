@@ -67,9 +67,13 @@ if (!gotTheLock) {
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
-        preload: path.join(__dirname, 'preload.js'),
-        autoplayPolicy: 'user-gesture-required' // From window.js
+        preload: path.resolve(__dirname, 'preload', 'index.js'),
+        autoplayPolicy: 'user-gesture-required'
       }
+    });
+
+    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+      console.log(`Renderer console: ${message} (source: ${sourceId}, line: ${line})`);
     });
 
     mainWindow.webContents.setUserAgent(appConfig.userAgent);
@@ -80,8 +84,8 @@ if (!gotTheLock) {
 
     mainWindow.loadURL(appConfig.url).catch(r => console.error('Error loading URL:', r));
     mainWindowState.manage(mainWindow);
+    //mainWindow.removeMenu();
 
-    // Add functionality from window.js
     setupExternalLinks(mainWindow);
     setupCloseEvent(mainWindow);
 
@@ -98,13 +102,12 @@ if (!gotTheLock) {
     return mainWindow;
   }
 
-  // Functions from window.js
   function setupExternalLinks(window) {
     console.log('Setting up external links handlers');
 
     window.webContents.setWindowOpenHandler((details) => {
       if (details.url.includes(new URL(appConfig.url).hostname) ||
-          details.url.includes('login.microsoftonline.com')) {
+                details.url.includes('login.microsoftonline.com')) {
         return {action: 'allow'};
       }
 
@@ -122,6 +125,7 @@ if (!gotTheLock) {
       if (!app.isQuitting) {
         event.preventDefault();
         mainWindow.hide();
+
         return false;
       }
       return true;
@@ -130,7 +134,6 @@ if (!gotTheLock) {
     app.isQuitting = false;
   }
 
-  // App startup
   app.whenReady().then(async () => {
     await session.defaultSession.clearCache();
 
@@ -141,7 +144,7 @@ if (!gotTheLock) {
       iconPath: trayIcon
     });
 
-    setupNotifications(mainWindow);
+    setupNotifications(mainWindow, trayIcon);
   });
 
   app.on('window-all-closed', () => {

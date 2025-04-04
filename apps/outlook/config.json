@@ -10,7 +10,13 @@
     "minWidth": 800,
     "minHeight": 600
   },
-  "permissions": ["notifications", "media", "clipboard-read", "clipboard-write"],
+  "permissions": [
+    "notifications",
+    "media",
+    "clipboard-read",
+    "clipboard-write",
+    "microphone"
+  ],
   "snapName": "outlook-ew",
   "snapDescription": "Microsoft Outlook web wrapper for Linux",
   "desktopName": "Microsoft Outlook",
