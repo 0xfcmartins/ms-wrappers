@@ -1,26 +1,17 @@
 const {Notification, BrowserWindow} = require('electron');
-const notifier = require('node-notifier');
 const {ipcMain} = require('electron');
 
-
-/**
- * Initializes the notification system for the main application window and tray icon.
- * Sets up event listeners and a method to display app-specific notifications.
- *
- * @param {BrowserWindow} mainWindow - The main application window instance.
- * @param {string} trayIcon - The file path or URL of the tray icon to use in notifications.
- * @return {void} Does not return a value.
- */
 function setupNotifications(mainWindow, trayIcon) {
 
   function showAppNotification(title, body) {
     try {
-      const { Notification } = require('electron');
+
       const notification = new Notification({
         title: title,
         body: body,
         silent: false,
-        icon: trayIcon
+        icon: trayIcon,
+        hasReply: false
       });
 
       notification.on('click', () => {
@@ -37,6 +28,7 @@ function setupNotifications(mainWindow, trayIcon) {
       });
 
       notification.show();
+
       console.log('Electron notification shown with click handler');
     } catch (error) {
       console.error('Notification error:', error);

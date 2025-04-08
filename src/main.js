@@ -68,36 +68,44 @@ if (!gotTheLock) {
         nodeIntegration: false,
         contextIsolation: true,
         preload: path.resolve(__dirname, 'preload', 'index.js'),
-        autoplayPolicy: 'user-gesture-required'
+        autoplayPolicy: 'user-gesture-required',
+        userAgent: appConfig.userAgent
+      },
+    });
+    mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+      (details, callback) => {
+        details.requestHeaders['Origin'] = appConfig.url;
+        details.requestHeaders['Referer'] = appConfig.url;
+        callback({ requestHeaders: details.requestHeaders });
       }
-    });
-
-    mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-      console.log(`Renderer console: ${message} (source: ${sourceId}, line: ${line})`);
-    });
-
+    );
     mainWindow.webContents.setUserAgent(appConfig.userAgent);
     mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
       const allowedPermissions = appConfig.permissions || [];
       callback(allowedPermissions.includes(permission));
     });
-
     mainWindow.loadURL(appConfig.url).catch(r => console.error('Error loading URL:', r));
     mainWindowState.manage(mainWindow);
-    //mainWindow.removeMenu();
-
-    setupExternalLinks(mainWindow);
-    setupCloseEvent(mainWindow);
-
+    mainWindow.removeMenu();
     mainWindow.on('focus', () => {
       if (process.platform === 'win32') {
         mainWindow.flashFrame(false);
       }
     });
-
     mainWindow.on('closed', () => {
       mainWindow = null;
     });
+
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+      if (permission === 'notifications') {
+        callback(false);
+      } else {
+        callback(true);
+      }
+    });
+
+    setupExternalLinks(mainWindow);
+    setupCloseEvent(mainWindow);
 
     return mainWindow;
   }

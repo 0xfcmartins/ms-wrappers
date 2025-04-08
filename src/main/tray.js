@@ -1,13 +1,5 @@
-const {Tray, Menu, app, Notification} = require('electron');
+const {Tray, Menu, app} = require('electron');
 
-/**
- * Sets up the system tray with a custom icon, menu, and click behavior for the application.
- *
- * @param {BrowserWindow} mainWindow - The main window of the application, used to control visibility and functionality.
- * @param appConfig - Application config
- * @return {Electron.CrossProcessExports.Tray} - The created Tray instance configured with icon, context menu, and click
- * behavior.
- */
 async function setupTrayAsync(mainWindow, appConfig) {
   return new Promise((resolve) => {
     const tray = new Tray(appConfig.iconPath);

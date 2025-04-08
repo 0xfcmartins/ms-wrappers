@@ -1,4 +1,7 @@
 /* global window */
+/* global MutationObserver */
+/* global Node */
+/* global document */
 
 try {
   const { contextBridge, ipcRenderer } = require('electron');
@@ -16,32 +19,47 @@ try {
   ipcRenderer.send('preload-executed');
 
   window.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOM loaded explicitly. Setting up MutationObserver explicitly to observe Teams DOM notifications!');
 
-    const observer = new MutationObserver((mutationsList) => {
-      for (const mutation of mutationsList) {
-        mutation.addedNodes.forEach((addedNode) => {
-          if (addedNode.nodeType === Node.ELEMENT_NODE) {
-            const elementText = addedNode.innerText;
-            if (elementText && elementText.match(/(sent a message|mentioned you|New message|replied to)/i)) {
-              console.log('✅ DOM-based Teams notification explicitly intercepted:', elementText.trim());
+    function setupNotificationObserver() {
+      const notificationsArea = document.querySelector('[data-tid="app-layout-area--in-app-notifications"]');
 
-              window.api.send('new-notification', {
-                title: 'Teams Notification',
-                body: elementText.trim(),
-              });
-            }
-          }
-        });
+      if (!notificationsArea) {
+        setTimeout(setupNotificationObserver, 100);
+        return;
       }
-    });
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+      console.log('✅ Found notifications area, setting up targeted observer');
 
-    console.log('✅ Teams notification MutationObserver explicitly active!');
+      const observer = new MutationObserver((mutationsList) => {
+        for (const mutation of mutationsList) {
+          mutation.addedNodes.forEach((addedNode) => {
+            if (addedNode.nodeType === Node.ELEMENT_NODE) {
+              const senderElement = addedNode.querySelector('span[id^="cn-normal-notification-toast-header-"]');
+              const messageElement = addedNode.querySelector('span[id^="cn-normal-notification-main-content-"]');
+
+              const sender = senderElement ? senderElement.innerText.trim() : '';
+              const messagePreview = messageElement ? messageElement.innerText.trim() : '';
+
+              if (sender && messagePreview) {
+                ipcRenderer.send('new-notification', {
+                  title: sender,
+                  body: messagePreview
+                });
+              }
+            }
+          });
+        }
+      });
+
+      observer.observe(notificationsArea, {
+        childList: true,
+        subtree: true
+      });
+
+      console.log('✅ Teams notification MutationObserver active on notifications area!');
+    }
+
+    setupNotificationObserver();
   });
 
 } catch (error) {
