@@ -1,9 +1,8 @@
 {
   "name": "web-wrappers",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Unofficial Electron wrapper for Microsoft Teams, built for Linux desktop.",
   "main": "Build.js",
-  "homepage": "https://github.com/0xfcmartins/teams-ew",
   "scripts": {
     "run:teams": "npx electron /apps/teams",
     "run:outlook": "npx electron /apps/outlook",
@@ -11,6 +10,11 @@
     "build:outlook": "node build.js outlook",
     "dev:teams": "node dev-run.js teams",
     "dev:outlook": "node dev-run.js outlook"
+  },
+  "homepage": "https://github.com/0xfcmartins/teams-ew",
+  "author": {
+    "name": "Francisco Martins",
+    "email": "francisco_jcm_7@hotmail.com"
   },
   "build": {
     "appId": "pt.fcmartins.teams-ew",
