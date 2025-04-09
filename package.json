@@ -1,6 +1,6 @@
 {
   "name": "web-wrappers",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Unofficial Electron wrapper for Microsoft Teams, built for Linux desktop.",
   "main": "Build.js",
   "scripts": {
