@@ -1,3 +1,4 @@
+[![outlook-ew](https://snapcraft.io/outlook-ew/badge.svg)](https://snapcraft.io/outlook-ew)
 # Web Wrappers
 **Unofficial Electron wrappers for web applications, built for Linux desktop.**
 ## Description

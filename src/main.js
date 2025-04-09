@@ -16,10 +16,11 @@
  * @property {string} snapDescription - Application description used for Snap packaging
  * @property {string} desktopName - Display name used in desktop environments
  * @property {string} desktopCategories - Categories for desktop environment integration
+ * @property {boolean} notifications - Enable native notifications
  */
 const appConfig = require('./app-config.json');
 
-const {app, BrowserWindow, session} = require('electron');
+const {app, BrowserWindow, dialog,session} = require('electron');
 const path = require('path');
 const windowStateKeeper = require('electron-window-state');
 
@@ -76,7 +77,7 @@ if (!gotTheLock) {
       (details, callback) => {
         details.requestHeaders['Origin'] = appConfig.url;
         details.requestHeaders['Referer'] = appConfig.url;
-        callback({ requestHeaders: details.requestHeaders });
+        callback({requestHeaders: details.requestHeaders});
       }
     );
     mainWindow.webContents.setUserAgent(appConfig.userAgent);
@@ -96,26 +97,83 @@ if (!gotTheLock) {
       mainWindow = null;
     });
 
-    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-      if (permission === 'notifications') {
-        callback(false);
-      } else {
-        callback(true);
-      }
-    });
+    if (!appConfig.notifications) {
+      console.log('Notifications disabled');
+      session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+        if (permission === 'notifications') {
+          callback(false);
+        } else {
+          callback(true);
+        }
+      });
+    }
 
     setupExternalLinks(mainWindow);
     setupCloseEvent(mainWindow);
+    setupDownloadHandler(mainWindow);
 
     return mainWindow;
   }
 
-  function setupExternalLinks(window) {
-    console.log('Setting up external links handlers');
+  function setupDownloadHandler() {
+    // Set up the download listener
+    session.defaultSession.on('will-download', (event, item) => {
+      const fileName = item.getFilename();
+      const totalBytes = item.getTotalBytes();
 
+      // Set download path (default to user's Downloads folder)
+      const filePath = path.join(app.getPath('downloads'), fileName);
+      item.setSavePath(filePath);
+
+      console.log(`Starting download of ${fileName}`);
+
+      // Monitor download state changes
+      item.on('updated', (event, state) => {
+        if (state === 'interrupted') {
+          console.log('Download interrupted.');
+        } else if (state === 'progressing') {
+          if (item.isPaused()) {
+            console.log('Download paused');
+          } else {
+            console.log(`Received bytes: ${item.getReceivedBytes()} of total ${totalBytes}`);
+          }
+        }
+      });
+
+      item.once('done', (event, state) => {
+        if (state === 'completed') {
+          console.log(`Download successfully saved to ${filePath}`);
+        } else {
+          console.error(`Download failed: ${state}`);
+        }
+      });
+    });
+    session.defaultSession.on('will-download', async (event, item) => {
+      const fileName = item.getFilename();
+
+      const { filePath, canceled } = await dialog.showSaveDialog({
+        title: 'Save Download',
+        defaultPath: path.join(app.getPath('downloads'), fileName)
+      });
+
+      if (canceled || !filePath) {
+        item.cancel();
+        console.log('Download canceled by the user.');
+        return;
+      }
+
+      item.setSavePath(filePath);
+    });
+
+  }
+
+  function setupExternalLinks(window) {
     window.webContents.setWindowOpenHandler((details) => {
       if (details.url.includes(new URL(appConfig.url).hostname) ||
-                details.url.includes('login.microsoftonline.com')) {
+                details.url.includes('login.microsoftonline.com') ||
+                details.url.includes('about:blank')
+      ) {
+
         return {action: 'allow'};
       }
 

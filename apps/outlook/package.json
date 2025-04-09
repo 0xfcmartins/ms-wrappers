@@ -16,5 +16,24 @@
     "electron": "^35.1.3",
     "electron-builder": "^26.0.12",
     "eslint": "^9.23.0"
+  },
+  "build": {
+    "appId": "pt.fcmartins.outlook-ew",
+    "productName": "Microsoft Outlook",
+    "linux": {
+      "target": [
+        "snap",
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "desktop": {
+        "entry": {
+          "Name": "Outlook",
+          "Comment": "Microsoft Outlook (PWA) wrapper for Linux",
+          "Categories": "Network;Office;Email;"
+        }
+      }
+    }
   }
 }

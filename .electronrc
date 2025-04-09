@@ -1,9 +1,7 @@
 {
-  "flags": [
-    "--enable-features=UseOzonePlatform",
-    "--ozone-platform=x11",
-    "--ignore-gpu-blocklist",
-    "--enable-gpu-rasterization",
-    "--enable-zero-copy"
-  ]
+ "flags": [
+   "--disable-gpu",
+   "--enable-features=UseOzonePlatform",
+   "--ozone-platform=x11"
+ ]
 }
