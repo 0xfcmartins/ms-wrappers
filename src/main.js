@@ -91,11 +91,9 @@ if (!gotTheLock) {
         contextIsolation: true,
         preload: path.resolve(__dirname, 'preload', 'index.js'),
         autoplayPolicy: 'user-gesture-required',
-        userAgent: appConfig.userAgent,
         session: persistentSession,
         backgroundThrottling: false,
         offscreen: false,
-        enableWebGL: false,
         disableBlinkFeatures: 'Accelerated2dCanvas,AcceleratedSmil'
       },
     });
@@ -111,11 +109,12 @@ if (!gotTheLock) {
       const allowedPermissions = appConfig.permissions || [];
       callback(allowedPermissions.includes(permission));
     });
+
     mainWindow.loadURL(appConfig.url, {
       userAgent: appConfig.userAgent,
-      httpReferrer: appConfig.url,
-      timeout: 30000
+      httpReferrer: appConfig.url
     }).catch(r => console.error('Error loading URL:', r));
+
     mainWindowState.manage(mainWindow);
     mainWindow.removeMenu();
     mainWindow.on('focus', () => {
@@ -147,8 +146,8 @@ if (!gotTheLock) {
 
     setupExternalLinks(mainWindow);
     setupCloseEvent(mainWindow);
-    setupDownloadHandler(mainWindow);
     enableLightPerformanceMode();
+    setupDownloadHandler();
 
     return mainWindow;
   }
@@ -193,6 +192,7 @@ if (!gotTheLock) {
         }
       });
     });
+
     session.defaultSession.on('will-download', async (event, item) => {
       const fileName = item.getFilename();
 
@@ -262,7 +262,7 @@ if (!gotTheLock) {
       if (global.gc) {
         global.gc();
       }
-    }, 60000); // Run every minute
+    }, 60000);
 
   });
 
@@ -272,7 +272,7 @@ if (!gotTheLock) {
     document.documentElement.style.setProperty('--animation-duration', '0s');
     document.querySelectorAll('img').forEach(img => {
       img.style.imageRendering = 'auto';
-    });`);
+    });`).catch(r => console.error('Error executing JS:', r));
   }
 
   app.on('window-all-closed', () => {
