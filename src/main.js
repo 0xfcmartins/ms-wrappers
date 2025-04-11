@@ -21,11 +21,27 @@
 const appConfig = require('./app-config.json');
 
 const {app, BrowserWindow, dialog,session} = require('electron');
+
+app.disableHardwareAcceleration();
+
+app.commandLine.appendSwitch('disable-gpu-rasterization');
+app.commandLine.appendSwitch('disable-zero-copy');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
+  app.commandLine.appendSwitch('ignore-gpu-blacklist');
+  app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
+}
+
 const path = require('path');
 const windowStateKeeper = require('electron-window-state');
 
-const {setupTray} = require('./main/tray');
-const {setupNotifications} = require('./main/notification');
+let setupTray, setupNotifications;
+function loadModules() {
+  if (!setupTray) setupTray = require('./main/tray').setupTray;
+  if (!setupNotifications) setupNotifications = require('./main/notification').setupNotifications;
+}
 
 const icon = path.join(__dirname, 'icons', appConfig.iconFile);
 const trayIcon = path.join(__dirname, 'icons', appConfig.trayIconFile);
@@ -40,7 +56,8 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
-  let mainWindow;
+
+  let mainWindow = null;
 
   app.on('second-instance', () => {
     if (mainWindow) {
@@ -51,6 +68,10 @@ if (!gotTheLock) {
   });
 
   function createWindow() {
+    const persistentSession = session.fromPartition('ms:app:ew:'+appConfig.snapName, {
+      cache: true
+    });
+
     const mainWindowState = windowStateKeeper({
       defaultWidth: appConfig.windowOptions.width,
       defaultHeight: appConfig.windowOptions.height,
@@ -70,7 +91,12 @@ if (!gotTheLock) {
         contextIsolation: true,
         preload: path.resolve(__dirname, 'preload', 'index.js'),
         autoplayPolicy: 'user-gesture-required',
-        userAgent: appConfig.userAgent
+        userAgent: appConfig.userAgent,
+        session: persistentSession,
+        backgroundThrottling: false,
+        offscreen: false,
+        enableWebGL: false,
+        disableBlinkFeatures: 'Accelerated2dCanvas,AcceleratedSmil'
       },
     });
     mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
@@ -85,7 +111,11 @@ if (!gotTheLock) {
       const allowedPermissions = appConfig.permissions || [];
       callback(allowedPermissions.includes(permission));
     });
-    mainWindow.loadURL(appConfig.url).catch(r => console.error('Error loading URL:', r));
+    mainWindow.loadURL(appConfig.url, {
+      userAgent: appConfig.userAgent,
+      httpReferrer: appConfig.url,
+      timeout: 30000
+    }).catch(r => console.error('Error loading URL:', r));
     mainWindowState.manage(mainWindow);
     mainWindow.removeMenu();
     mainWindow.on('focus', () => {
@@ -96,7 +126,14 @@ if (!gotTheLock) {
     mainWindow.on('closed', () => {
       mainWindow = null;
     });
-
+    mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+      { urls: [appConfig.url + '/*'] },
+      (details, callback) => {
+        details.requestHeaders['Origin'] = appConfig.url;
+        details.requestHeaders['Referer'] = appConfig.url;
+        callback({requestHeaders: details.requestHeaders});
+      }
+    );
     if (!appConfig.notifications) {
       console.log('Notifications disabled');
       session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
@@ -111,7 +148,15 @@ if (!gotTheLock) {
     setupExternalLinks(mainWindow);
     setupCloseEvent(mainWindow);
     setupDownloadHandler(mainWindow);
+    enableLightPerformanceMode();
 
+    return mainWindow;
+  }
+
+  function getOrCreateMainWindow() {
+    if (!mainWindow) {
+      createWindow();
+    }
     return mainWindow;
   }
 
@@ -203,7 +248,8 @@ if (!gotTheLock) {
   app.whenReady().then(async () => {
     await session.defaultSession.clearCache();
 
-    mainWindow = createWindow();
+    loadModules();
+    mainWindow = getOrCreateMainWindow();
 
     await setupTray(mainWindow, {
       name: appConfig.name,
@@ -211,7 +257,23 @@ if (!gotTheLock) {
     });
 
     setupNotifications(mainWindow, trayIcon);
+
+    setInterval(() => {
+      if (global.gc) {
+        global.gc();
+      }
+    }, 60000); // Run every minute
+
   });
+
+  function enableLightPerformanceMode() {
+    // Remove animations, reduce quality of images, etc.
+    mainWindow.webContents.executeJavaScript(`
+    document.documentElement.style.setProperty('--animation-duration', '0s');
+    document.querySelectorAll('img').forEach(img => {
+      img.style.imageRendering = 'auto';
+    });`);
+  }
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

@@ -1,6 +1,6 @@
 {
   "name": "outlook-ew",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Unofficial Electron wrapper for Microsoft Outlook, built for Linux desktop.",
   "main": "main.js",
   "homepage": "https://github.com/0xfcmartins/teams-ew",

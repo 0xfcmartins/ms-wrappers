@@ -1,4 +1,4 @@
-const {Notification, BrowserWindow} = require('electron');
+const {Notification} = require('electron');
 const {ipcMain} = require('electron');
 
 function setupNotifications(mainWindow, trayIcon) {
@@ -16,8 +16,7 @@ function setupNotifications(mainWindow, trayIcon) {
 
       notification.on('click', () => {
         console.log('Notification clicked, focusing app window');
-        const mainWindow = BrowserWindow.getAllWindows().find(win => !win.isDestroyed());
-        if (mainWindow) {
+        if (mainWindow && !mainWindow.isDestroyed()) {
           if (mainWindow.isMinimized()) mainWindow.restore();
           mainWindow.show();
           mainWindow.focus();
@@ -26,7 +25,7 @@ function setupNotifications(mainWindow, trayIcon) {
           console.log('No valid window found to focus');
         }
       });
-
+      
       notification.show();
 
       console.log('Electron notification shown with click handler');

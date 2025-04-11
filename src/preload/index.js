@@ -12,11 +12,28 @@ try {
       const validChannels = ['new-notification'];
       if (validChannels.includes(channel)) {
         ipcRenderer.send(channel, data);
+
       }
     },
   });
 
   ipcRenderer.send('preload-executed');
+
+  function throttle(callback, delay) {
+    let lastCall = 0;
+    return function(...args) {
+      const now = new Date().getTime();
+      if (now - lastCall < delay) {
+        return;
+      }
+      lastCall = now;
+      return callback(...args);
+    };
+  }
+
+  const throttledSendNotification = throttle((data) => {
+    ipcRenderer.send('new-notification', data);
+  }, 500); // Limit to once every 500ms
 
   window.addEventListener('DOMContentLoaded', () => {
 
@@ -32,24 +49,28 @@ try {
 
       const observer = new MutationObserver((mutationsList) => {
         for (const mutation of mutationsList) {
-          mutation.addedNodes.forEach((addedNode) => {
-            if (addedNode.nodeType === Node.ELEMENT_NODE) {
-              const senderElement = addedNode.querySelector('span[id^="cn-normal-notification-toast-header-"]');
-              const messageElement = addedNode.querySelector('span[id^="cn-normal-notification-main-content-"]');
+          if (mutation.type === 'childList' && mutation.addedNodes.length) {
+            // Process only the container node if possible instead of traversing each node
+            const notificationContainer = Array.from(mutation.addedNodes).find(
+                node => node.nodeType === Node.ELEMENT_NODE &&
+                    node.matches('[data-tid^="notification-container"]')
+            );
 
-              const sender = senderElement ? senderElement.innerText.trim() : '';
-              const messagePreview = messageElement ? messageElement.innerText.trim() : '';
+            if (notificationContainer) {
+              const sender = notificationContainer.querySelector('span[id^="cn-normal-notification-toast-header-"]')?.innerText.trim();
+              const messagePreview = notificationContainer.querySelector('span[id^="cn-normal-notification-main-content-"]')?.innerText.trim();
 
               if (sender && messagePreview) {
-                ipcRenderer.send('new-notification', {
+                throttledSendNotification('new-notification', {
                   title: sender,
                   body: messagePreview
                 });
               }
             }
-          });
+          }
         }
       });
+
 
       observer.observe(notificationsArea, {
         childList: true,
