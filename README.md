@@ -1,6 +1,15 @@
 [![outlook-ew](https://snapcraft.io/outlook-ew/badge.svg)](https://snapcraft.io/outlook-ew)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=0xfcmartins_ms-wrappers&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=0xfcmartins_ms-wrappers)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=0xfcmartins_ms-wrappers&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=0xfcmartins_ms-wrappers)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=0xfcmartins_ms-wrappers&metric=bugs)](https://sonarcloud.io/summary/new_code?id=0xfcmartins_ms-wrappers)
+[![Vulnerabilities](https://sonarcloud.io/api/project_badges/measure?project=0xfcmartins_ms-wrappers&metric=vulnerabilities)](https://sonarcloud.io/summary/new_code?id=0xfcmartins_ms-wrappers)
+[![Technical Debt](https://sonarcloud.io/api/project_badges/measure?project=0xfcmartins_ms-wrappers&metric=sqale_index)](https://sonarcloud.io/summary/new_code?id=0xfcmartins_ms-wrappers)
+
 # Web Wrappers
 **Unofficial Electron wrappers for web applications, built for Linux desktop.**
+
+[![SonarQube Cloud](https://sonarcloud.io/images/project_badges/sonarcloud-dark.svg)](https://sonarcloud.io/summary/new_code?id=0xfcmartins_ms-wrappers)
+
 ## Description
 This project provides Electron-based desktop applications that wrap web services, making them feel more like native applications. Currently, it includes wrappers for:
 - Microsoft Teams
