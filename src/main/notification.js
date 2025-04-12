@@ -28,6 +28,10 @@ function setupNotifications(mainWindow, trayIcon) {
       
       notification.show();
 
+      setTimeout(() => {
+        notification.close();
+      }, 10000);
+
       console.log('Electron notification shown with click handler');
     } catch (error) {
       console.error('Notification error:', error);

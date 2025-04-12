@@ -20,24 +20,12 @@
  */
 const appConfig = require('./app-config.json');
 
-const {app, BrowserWindow, dialog,session} = require('electron');
-
-app.disableHardwareAcceleration();
-
-app.commandLine.appendSwitch('disable-gpu-rasterization');
-app.commandLine.appendSwitch('disable-zero-copy');
-app.commandLine.appendSwitch('disable-software-rasterizer');
-
-if (process.platform === 'linux') {
-  app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
-  app.commandLine.appendSwitch('ignore-gpu-blacklist');
-  app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
-}
-
+const {app,ipcMain, BrowserWindow, dialog, session} = require('electron');
 const path = require('path');
 const windowStateKeeper = require('electron-window-state');
 
 let setupTray, setupNotifications;
+
 function loadModules() {
   if (!setupTray) setupTray = require('./main/tray').setupTray;
   if (!setupNotifications) setupNotifications = require('./main/notification').setupNotifications;
@@ -46,7 +34,18 @@ function loadModules() {
 const icon = path.join(__dirname, 'icons', appConfig.iconFile);
 const trayIcon = path.join(__dirname, 'icons', appConfig.trayIconFile);
 
+
 app.name = appConfig.name;
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu-rasterization');
+app.commandLine.appendSwitch('disable-zero-copy');
+app.commandLine.appendSwitch('disable-software-rasterizer');
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
+  app.commandLine.appendSwitch('ignore-gpu-blacklist');
+  app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
+}
+app.commandLine.appendSwitch('disable-features', 'InPrivateMode');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId(appConfig.name);
@@ -68,9 +67,6 @@ if (!gotTheLock) {
   });
 
   function createWindow() {
-    const persistentSession = session.fromPartition('ms:app:ew:'+appConfig.snapName, {
-      cache: true
-    });
 
     const mainWindowState = windowStateKeeper({
       defaultWidth: appConfig.windowOptions.width,
@@ -91,7 +87,9 @@ if (!gotTheLock) {
         contextIsolation: true,
         preload: path.resolve(__dirname, 'preload', 'index.js'),
         autoplayPolicy: 'user-gesture-required',
-        session: persistentSession,
+        partition: 'persist:' + appConfig.snapName,
+        allowRunningInsecureContent: false,
+        webSecurity: true,
         backgroundThrottling: false,
         offscreen: false,
         disableBlinkFeatures: 'Accelerated2dCanvas,AcceleratedSmil'
@@ -110,12 +108,21 @@ if (!gotTheLock) {
       callback(allowedPermissions.includes(permission));
     });
 
+    mainWindow.webContents.on('console-message', (event) => {
+      const { message } = event;
+
+      if (message.includes('Uncaught (in promise) AbortError: Registration failed - push service not available')) {
+        ipcMain.emit('new-notification', null, {
+          title: 'System notifications are inactive',
+          body: 'Please switch application notification mode to "Alert" for proper notifications.'
+        });
+      }
+    });
+
     mainWindow.loadURL(appConfig.url, {
       userAgent: appConfig.userAgent,
       httpReferrer: appConfig.url
     }).catch(r => console.error('Error loading URL:', r));
-
-    mainWindowState.manage(mainWindow);
     mainWindow.removeMenu();
     mainWindow.on('focus', () => {
       if (process.platform === 'win32') {
@@ -126,20 +133,23 @@ if (!gotTheLock) {
       mainWindow = null;
     });
     mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
-      { urls: [appConfig.url + '/*'] },
+      {urls: [appConfig.url + '/*']},
       (details, callback) => {
         details.requestHeaders['Origin'] = appConfig.url;
         details.requestHeaders['Referer'] = appConfig.url;
         callback({requestHeaders: details.requestHeaders});
       }
     );
+
+    mainWindowState.manage(mainWindow);
+
     if (!appConfig.notifications) {
       console.log('Notifications disabled');
       session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-        if (permission === 'notifications') {
-          callback(false);
-        } else {
+        if (permission === 'notifications' || permission === 'push') {
           callback(true);
+        } else {
+          callback(false);
         }
       });
     }
@@ -160,43 +170,11 @@ if (!gotTheLock) {
   }
 
   function setupDownloadHandler() {
-    // Set up the download listener
-    session.defaultSession.on('will-download', (event, item) => {
+    session.defaultSession.on('will-download', async (event, item) => {
       const fileName = item.getFilename();
       const totalBytes = item.getTotalBytes();
 
-      // Set download path (default to user's Downloads folder)
-      const filePath = path.join(app.getPath('downloads'), fileName);
-      item.setSavePath(filePath);
-
-      console.log(`Starting download of ${fileName}`);
-
-      // Monitor download state changes
-      item.on('updated', (event, state) => {
-        if (state === 'interrupted') {
-          console.log('Download interrupted.');
-        } else if (state === 'progressing') {
-          if (item.isPaused()) {
-            console.log('Download paused');
-          } else {
-            console.log(`Received bytes: ${item.getReceivedBytes()} of total ${totalBytes}`);
-          }
-        }
-      });
-
-      item.once('done', (event, state) => {
-        if (state === 'completed') {
-          console.log(`Download successfully saved to ${filePath}`);
-        } else {
-          console.error(`Download failed: ${state}`);
-        }
-      });
-    });
-
-    session.defaultSession.on('will-download', async (event, item) => {
-      const fileName = item.getFilename();
-
-      const { filePath, canceled } = await dialog.showSaveDialog({
+      const {filePath, canceled} = await dialog.showSaveDialog({
         title: 'Save Download',
         defaultPath: path.join(app.getPath('downloads'), fileName)
       });
@@ -208,18 +186,44 @@ if (!gotTheLock) {
       }
 
       item.setSavePath(filePath);
-    });
+      console.log(`Starting download of ${fileName}`);
 
+      item.on('updated', (event, state) => {
+        if (state === 'interrupted') {
+          console.log('Download interrupted.');
+        } else if (state === 'progressing') {
+          console.log(`Progress: ${item.getReceivedBytes()} / ${totalBytes}`);
+        }
+      });
+
+      item.once('done', (event, state) => {
+        if (state === 'completed') {
+          console.log(`Download saved to ${filePath}`);
+        } else {
+          console.error(`Download failed: ${state}`);
+        }
+      });
+    });
   }
 
   function setupExternalLinks(window) {
     window.webContents.setWindowOpenHandler((details) => {
-      if (details.url.includes(new URL(appConfig.url).hostname) ||
-                details.url.includes('login.microsoftonline.com') ||
-                details.url.includes('about:blank')
-      ) {
+      const allowedUrls = [
+        new URL(appConfig.url).hostname,
+        'login.microsoftonline.com',
+        'about:blank'
+      ];
 
-        return {action: 'allow'};
+      if (allowedUrls.some(url => details.url.includes(url))) {
+        return {
+          action: 'allow',
+          overrideBrowserWindowOptions: {
+            autoHideMenuBar: true,
+            menuBarVisible: false,
+            toolbar: false,
+            frame: true,
+          }
+        };
       }
 
       if (details.url.startsWith('https://') || details.url.startsWith('http://')) {

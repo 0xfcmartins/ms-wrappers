@@ -1,8 +1,3 @@
-/* global window */
-/* global MutationObserver */
-/* global Node */
-/* global document */
-
 try {
   const { contextBridge, ipcRenderer } = require('electron');
 
@@ -31,14 +26,36 @@ try {
     };
   }
 
+  function parseNotificationHtml(htmlString) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(htmlString, 'text/html');
+
+    const notificationButton = doc.querySelector('button[aria-roledescription="Notification"]');
+    if (!notificationButton) return { title: '', text: '' };
+
+    const contentWrapper = notificationButton.querySelectorAll('div[aria-hidden="true"]')[1];
+    if (!contentWrapper) return { title: '', text: '' };
+
+    const innerDivs = contentWrapper.querySelectorAll('div');
+
+    const title = innerDivs[0]?.textContent.trim() ?? '';
+    const subtitle = innerDivs[1]?.textContent.trim() ?? '';
+    const message = innerDivs[2]?.textContent.trim().replace(/\s+/g, ' ') ?? '';
+
+    const fullText = [subtitle, message].filter(Boolean).join(' - ');
+
+    return { title, text: fullText };
+  }
+
   const throttledSendNotification = throttle((data) => {
     ipcRenderer.send('new-notification', data);
-  }, 500); // Limit to once every 500ms
+  }, 500);
 
   window.addEventListener('DOMContentLoaded', () => {
 
     function setupNotificationObserver() {
-      const notificationsArea = document.querySelector('[data-tid="app-layout-area--in-app-notifications"]');
+      let notificationsArea = document.querySelector('[data-tid="app-layout-area--in-app-notifications"]')
+          || document.querySelector('div[data-app-section="NotificationPane"]');
 
       if (!notificationsArea) {
         setTimeout(setupNotificationObserver, 100);
@@ -50,9 +67,9 @@ try {
       const observer = new MutationObserver((mutationsList) => {
         for (const mutation of mutationsList) {
           if (mutation.type === 'childList' && mutation.addedNodes.length) {
-            // Process only the container node if possible instead of traversing each node
+
             const notificationContainer = Array.from(mutation.addedNodes).find(
-                node => node.nodeType === Node.ELEMENT_NODE &&
+              node => node.nodeType === Node.ELEMENT_NODE &&
                     node.matches('[data-tid^="notification-container"]')
             );
 
@@ -67,10 +84,33 @@ try {
                 });
               }
             }
+
+            Array.from(mutation.addedNodes).forEach(node => {
+              console.log(node);
+              console.log(node.outerHTML);
+              console.log('-----');
+              console.log(node.innerText);
+            });
+
+            mutation.addedNodes.forEach(node => {
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                const notificationButton = node.querySelector('button[aria-roledescription="Notification"]');
+                if (notificationButton) {
+                  console.log('✅ Notification Button found:', notificationButton);
+
+                  const message = parseNotificationHtml(notificationButton.outerHTML);
+
+                  throttledSendNotification({
+                    title: message.title,
+                    body: message.text
+                  });
+                }
+              }
+            });
+
           }
         }
       });
-
 
       observer.observe(notificationsArea, {
         childList: true,
