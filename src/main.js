@@ -205,8 +205,16 @@ if (!gotTheLock) {
       });
     });
   }
-
+  
   function setupExternalLinks(window) {
+    const { shell } = require('electron');
+
+    const openExternalUrl = (url) => {
+      shell.openExternal(url).catch(err => console.error('Error loading URL:', err));
+
+      return { action: 'deny' };
+    };
+
     window.webContents.setWindowOpenHandler((details) => {
       const allowedUrls = [
         new URL(appConfig.url).hostname,
@@ -214,26 +222,33 @@ if (!gotTheLock) {
         'about:blank'
       ];
 
+      const forceNewWindowUrls = [
+        'statics.teams.cdn.office.net/evergreen-assets/safelinks'
+      ];
+
+      if (forceNewWindowUrls.some(url => details.url.includes(url))) {
+        return openExternalUrl(details.url);
+      }
+
       if (allowedUrls.some(url => details.url.includes(url))) {
         return {
           action: 'allow',
           overrideBrowserWindowOptions: {
-            autoHideMenuBar: true,
-            menuBarVisible: false,
-            toolbar: false,
+            menuBarVisible: true,
+            toolbar: true,
             frame: true,
           }
         };
       }
 
       if (details.url.startsWith('https://') || details.url.startsWith('http://')) {
-        require('electron').shell.openExternal(details.url)
-          .catch(err => console.error('Error loading URL:', err));
+        return openExternalUrl(details.url);
       }
 
-      return {action: 'deny'};
+      return { action: 'deny' };
     });
   }
+
 
   function setupCloseEvent(mainWindow) {
     mainWindow.on('close', (event) => {
