@@ -1,6 +1,6 @@
 [Desktop Entry]
 X-SnapInstanceName=teams-ew
-Name=Microsoft Teams
+Name=Teams
 X-SnapAppName=teams-ew
 Exec=teams-ew
 Terminal=false
@@ -8,4 +8,4 @@ Type=Application
 Icon=${SNAP}/meta/gui/teams-ew.png
 StartupWMClass=teams-ew
 Comment=Unofficial Electron wrapper for Microsoft Teams, built for Linux desktop.
-Categories=Utility;
+Categories=Office;
