@@ -54,7 +54,7 @@ try {
   window.addEventListener('DOMContentLoaded', () => {
 
     function setupNotificationObserver() {
-      let notificationsArea = document.querySelector('[data-tid="app-layout-area--in-app-notifications"]')
+      let notificationsArea = document.querySelector('div[data-tid="app-layout-area--notifications"]')
           || document.querySelector('div[data-app-section="NotificationPane"]');
 
       if (!notificationsArea) {
@@ -78,7 +78,7 @@ try {
               const messagePreview = notificationContainer.querySelector('span[id^="cn-normal-notification-main-content-"]')?.innerText.trim();
 
               if (sender && messagePreview) {
-                throttledSendNotification('new-notification', {
+                throttledSendNotification({
                   title: sender,
                   body: messagePreview
                 });

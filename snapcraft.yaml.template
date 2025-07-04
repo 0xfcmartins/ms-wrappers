@@ -22,12 +22,17 @@ apps:
         - camera
         - audio-playback
         - audio-record
+        - pulseaudio
+        - alsa
         - desktop
         - desktop-legacy
         - home
         - removable-media
         - opengl
         - browser-support
+plugs:
+  camera:
+    interface: camera
 
 parts:
   application:

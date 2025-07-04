@@ -46,6 +46,10 @@ if (process.platform === 'linux') {
   app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
 }
 app.commandLine.appendSwitch('disable-features', 'InPrivateMode');
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
+app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
+app.commandLine.appendSwitch('enable-features', 'WebRTC-H264WithOpenH264FFmpeg');
 
 if (process.platform === 'win32') {
   app.setAppUserModelId(appConfig.name);
@@ -83,11 +87,15 @@ if (!gotTheLock) {
       minHeight: appConfig.windowOptions.minHeight,
       icon: icon,
       webPreferences: {
+        extensions: true,
         nodeIntegration: false,
+        enableRemoteModule: false,
         contextIsolation: true,
         preload: path.resolve(__dirname, 'preload', 'index.js'),
         autoplayPolicy: 'user-gesture-required',
         partition: 'persist:' + appConfig.snapName,
+        enableWebrtc: true,  // Add this line
+        webgl: true,        // Add this line
         allowRunningInsecureContent: false,
         webSecurity: true,
         backgroundThrottling: false,
@@ -104,8 +112,11 @@ if (!gotTheLock) {
     );
     mainWindow.webContents.setUserAgent(appConfig.userAgent);
     mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
+      console.log(`Permission requested: ${permission}`);
       const allowedPermissions = appConfig.permissions || [];
-      callback(allowedPermissions.includes(permission));
+      const allowed = allowedPermissions.includes(permission);
+      console.log(`Permission ${permission} ${allowed ? 'allowed' : 'denied'}`);
+      callback(allowed);
     });
 
     mainWindow.webContents.on('console-message', (event) => {
@@ -118,7 +129,14 @@ if (!gotTheLock) {
         });
       }
     });
-
+    mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          'Content-Security-Policy': ['']
+        }
+      });
+    });
     mainWindow.loadURL(appConfig.url, {
       userAgent: appConfig.userAgent,
       httpReferrer: appConfig.url
@@ -146,13 +164,15 @@ if (!gotTheLock) {
     if (!appConfig.notifications) {
       console.log('Notifications disabled');
       session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-        if (permission === 'notifications' || permission === 'push') {
+        const allowedPermissions = appConfig.permissions || [];
+        if (permission === 'notifications' || permission === 'push' || allowedPermissions.includes(permission)) {
           callback(true);
         } else {
           callback(false);
         }
       });
     }
+
 
     setupExternalLinks(mainWindow);
     setupCloseEvent(mainWindow);
@@ -205,7 +225,7 @@ if (!gotTheLock) {
       });
     });
   }
-  
+
   function setupExternalLinks(window) {
     const { shell } = require('electron');
 
