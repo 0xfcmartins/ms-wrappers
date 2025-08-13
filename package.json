@@ -50,6 +50,7 @@
     "eslint": "^9.23.0"
   },
   "dependencies": {
+    "electron-store": "^10.1.0",
     "electron-window-state": "^5.0.3"
   }
 }

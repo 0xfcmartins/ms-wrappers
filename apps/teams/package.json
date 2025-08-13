@@ -1,6 +1,6 @@
 {
   "name": "teams-ew",
-  "version": "1.0.1",
+  "version": "1.0.4",
   "description": "Unofficial Electron wrapper for Microsoft Teams, built for Linux desktop.",
   "main": "main.js",
   "homepage": "https://github.com/0xfcmartins/teams-ew",
@@ -36,7 +36,7 @@
       }
     },
     "snap": {
-      "plugs": ["default", "camera", "microphone", "audio-playback", "audio-record"]
+      "plugs": ["default", "camera", "audio-playback", "audio-record"]
     }
   }
 }
