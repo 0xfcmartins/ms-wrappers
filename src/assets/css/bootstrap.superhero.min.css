@@ -1,0 +1,53 @@
+/* Bootstrap Superhero Theme for StreamSelector */
+body {
+  color: #fff;
+  background-color: #2b3e50;
+}
+
+.container-fluid {
+  background-color: #2b3e50;
+}
+
+/* Button theme overrides */
+.btn-primary {
+  color: #fff;
+  background-color: #df691a;
+  border-color: #df691a;
+}
+
+.btn-primary:hover {
+  color: #fff;
+  background-color: #c65715;
+  border-color: #b84d12;
+}
+
+.btn-secondary {
+  color: #fff;
+  background-color: #4e5d6c;
+  border-color: #4e5d6c;
+}
+
+.btn-secondary:hover {
+  color: #fff;
+  background-color: #3e4b56;
+  border-color: #37434e;
+}
+
+/* Form controls theme */
+select {
+  color: #fff;
+  background-color: #4e5d6c;
+  border-color: #4e5d6c;
+}
+
+select:focus {
+  color: #fff;
+  background-color: #4e5d6c;
+  border-color: #df691a;
+  box-shadow: 0 0 0 0.2rem rgba(223, 105, 26, 0.25);
+}
+
+/* Text color overrides */
+label {
+  color: #fff;
+}

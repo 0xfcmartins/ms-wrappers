@@ -1,0 +1,33 @@
+/* Bootstrap Icons for StreamSelector */
+.bi {
+    display: inline-block;
+    font-family: "bootstrap-icons", serif;
+    font-style: normal;
+    font-weight: normal !important;
+    font-variant: normal;
+    text-transform: none;
+    line-height: 1;
+    vertical-align: -0.125em;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Close icon using CSS content instead of font */
+.bi-x-lg::before {
+    content: "×";
+    font-size: 1.5em;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.bi-x-lg {
+    display: inline-block;
+    cursor: pointer;
+    color: #fff;
+    font-size: 1.2em;
+    padding: 0.5rem;
+}
+
+.bi-x-lg:hover {
+    color: #df691a;
+}

@@ -15,8 +15,7 @@
     "notifications",
     "media",
     "clipboard-read",
-    "clipboard-write",
-    "microphone"
+    "clipboard-write"
   ],
   "snapName": "outlook-ew",
   "snapDescription": "Microsoft Outlook web wrapper for Linux",

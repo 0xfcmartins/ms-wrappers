@@ -12,6 +12,24 @@ try {
     },
   });
 
+  contextBridge.exposeInMainWorld('electronAPI', {
+    sendScreenSharingStarted: (sourceId) =>
+      ipcRenderer.send("screen-sharing-started", sourceId),
+    sendScreenSharingStopped: () => ipcRenderer.send("screen-sharing-stopped"),
+    send: (channel, ...args) => {
+      if (
+        [
+          "active-screen-share-stream",
+          "screen-sharing-stopped",
+          "screen-sharing-started",
+          "proceed-camera-activation",
+        ].includes(channel)
+      ) {
+        return ipcRenderer.send(channel, ...args);
+      }
+    },
+  });
+
   ipcRenderer.send('preload-executed');
 
   function throttle(callback, delay) {
@@ -54,7 +72,7 @@ try {
   window.addEventListener('DOMContentLoaded', () => {
 
     function setupNotificationObserver() {
-      let notificationsArea = document.querySelector('[data-tid="app-layout-area--in-app-notifications"]')
+      let notificationsArea = document.querySelector('div[data-tid="app-layout-area--notifications"]')
           || document.querySelector('div[data-app-section="NotificationPane"]');
 
       if (!notificationsArea) {
@@ -78,7 +96,7 @@ try {
               const messagePreview = notificationContainer.querySelector('span[id^="cn-normal-notification-main-content-"]')?.innerText.trim();
 
               if (sender && messagePreview) {
-                throttledSendNotification('new-notification', {
+                throttledSendNotification({
                   title: sender,
                   body: messagePreview
                 });

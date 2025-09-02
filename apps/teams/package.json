@@ -1,6 +1,6 @@
 {
   "name": "teams-ew",
-  "version": "1.0.0",
+  "version": "1.0.4",
   "description": "Unofficial Electron wrapper for Microsoft Teams, built for Linux desktop.",
   "main": "main.js",
   "homepage": "https://github.com/0xfcmartins/teams-ew",
@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "pt.fcmartins.teams-ew",
-    "productName": "Microsoft Teans",
+    "productName": "Microsoft Teams",
     "linux": {
       "target": [
         "snap",
@@ -29,11 +29,14 @@
       "category": "Office",
       "desktop": {
         "entry": {
-          "Name": "Teans",
-          "Comment": "Microsoft Teans (PWA) wrapper for Linux",
+          "Name": "Teams",
+          "Comment": "Microsoft Teams (PWA) wrapper for Linux",
           "Categories": "Network;Office;"
         }
       }
+    },
+    "snap": {
+      "plugs": ["default", "camera", "audio-playback", "audio-record"]
     }
   }
 }

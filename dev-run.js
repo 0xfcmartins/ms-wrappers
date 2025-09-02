@@ -22,6 +22,11 @@ fs.mkdirSync(preloadDir, { recursive: true });
 fs.cpSync(path.join(__dirname, 'src', 'main'), mainDir, { recursive: true });
 fs.cpSync(path.join(__dirname, 'src', 'preload'), preloadDir, { recursive: true });
 
+// Copy screen sharing module
+const displayCaptureDir = path.join(tempDir, 'display-capture');
+fs.mkdirSync(displayCaptureDir, { recursive: true });
+fs.cpSync(path.join(__dirname, 'src', 'display-capture'), displayCaptureDir, { recursive: true });
+
 // Copy icons to correct location
 if (fs.existsSync(path.join(appDir, 'icons'))) {
   fs.cpSync(path.join(appDir, 'icons'), path.join(tempDir, 'icons'), { recursive: true });
