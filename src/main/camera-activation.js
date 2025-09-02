@@ -1,5 +1,4 @@
-const { exec, spawnSync } = require('child_process');
-
+const {spawnSync, spawn } = require('child_process');
 /**
  * Camera Activation Module
  * Handles snap permission setup for Microsoft Teams camera and audio access
@@ -116,6 +115,49 @@ const SNAP_COMMANDS = [
   'snap connect teams-ew:audio-record',
   'snap connect teams-ew:audio-playbook'
 ];
+
+// Security: Whitelist of allowed sudo tools
+const ALLOWED_SUDO_TOOLS = ['pkexec', 'gksudo', 'kdesu', 'sudo'];
+
+// Security: Whitelist of allowed snap interfaces
+const ALLOWED_SNAP_INTERFACES = ['teams-ew:camera', 'teams-ew:audio-record', 'teams-ew:audio-playbook'];
+
+/**
+ * Validates that a sudo tool is in the allowed list
+ * @param {string} tool - The sudo tool to validate
+ * @returns {boolean} True if the tool is allowed
+ */
+function validateSudoTool(tool) {
+  if (typeof tool !== 'string' || tool.length === 0) {
+    return false;
+  }
+  
+  // Remove any path components and validate only the tool name
+  const toolName = tool.split('/').pop();
+  return ALLOWED_SUDO_TOOLS.includes(toolName);
+}
+
+/**
+ * Validates that a snap command only uses allowed interfaces
+ * @param {string} command - The snap command to validate
+ * @returns {boolean} True if the command is safe
+ */
+function validateSnapCommand(command) {
+  if (typeof command !== 'string' || command.length === 0) {
+    return false;
+  }
+  
+  // Must start with 'snap connect '
+  if (!command.startsWith('snap connect ')) {
+    return false;
+  }
+  
+  // Extract the interface name
+  const connect = command.replace('snap connect ', '').trim();
+  
+  // Must be in allowed list
+  return ALLOWED_SNAP_INTERFACES.includes(connect);
+}
 
 const ERROR_MESSAGES = {
   AUTHENTICATION_FAILED: 'Authentication was cancelled or failed. The permission setup was not completed. You can try again at any time from the tray menu. Make sure to enter your administrator password when prompted.',
@@ -325,7 +367,7 @@ function showProgress(mainWindow) {
 }
 
 /**
- * Executes snap connect commands with GUI sudo
+ * Executes snap connect commands with GUI sudo securely
  * @param {BrowserWindow} mainWindow - The main application window
  * @param {Function} resultCallback - Callback for showing results
  */
@@ -335,21 +377,58 @@ async function executeSnapCommands(mainWindow, resultCallback) {
 
   try {
     const sudoTool = await detectSudoTool();
-    const combinedCommand = SNAP_COMMANDS.join(' && ');
-    const fullCommand = `${sudoTool} sh -c "${combinedCommand}"`;
     
-    console.log(`Executing all commands with single sudo: ${fullCommand}`);
-
-    exec(fullCommand, { timeout: 120000 }, (error, stdout, stderr) => {
-      if (error) {
-        console.error('Error executing combined commands:', error.message);
+    // Security: Validate the sudo tool
+    if (!validateSudoTool(sudoTool)) {
+      console.error('Invalid sudo tool detected:', sudoTool);
+      resultCallback(mainWindow, false, ERROR_MESSAGES.SYSTEM_ERROR.replace('{error}', 'Invalid authentication tool'));
+      return;
+    }
+    
+    // Security: Validate all snap commands
+    for (const command of SNAP_COMMANDS) {
+      if (!validateSnapCommand(command)) {
+        console.error('Invalid snap command detected:', command);
+        resultCallback(mainWindow, false, ERROR_MESSAGES.SYSTEM_ERROR.replace('{error}', 'Invalid command detected'));
+        return;
+      }
+    }
+    
+    // Create safe combined command using individual validation
+    const combinedCommand = SNAP_COMMANDS.join(' && ');
+    
+    // Security: Use spawn with separated arguments instead of exec with string interpolation
+    const args = ['sh', '-c', combinedCommand];
+    
+    console.log(`Executing commands securely with: ${sudoTool}`, args);
+    
+    const childProcess = spawn(sudoTool, args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+      timeout: 120000
+    });
+    
+    let stdout = '';
+    let stderr = '';
+    
+    childProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+    
+    childProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+    
+    childProcess.on('close', (code) => {
+      if (code !== 0) {
+        console.error('Error executing commands, exit code:', code);
+        console.error('stderr:', stderr);
         
         // Handle specific error types
-        let errorMessage = ERROR_MESSAGES.SYSTEM_ERROR.replace('{error}', error.message);
+        let errorMessage = ERROR_MESSAGES.SYSTEM_ERROR.replace('{error}', `Exit code: ${code}`);
         
-        if (error.message.includes('authentication') || error.message.includes('cancelled')) {
+        if (stderr.includes('authentication') || stderr.includes('cancelled')) {
           errorMessage = ERROR_MESSAGES.AUTHENTICATION_FAILED;
-        } else if (error.message.includes('dismissed')) {
+        } else if (stderr.includes('dismissed')) {
           errorMessage = ERROR_MESSAGES.SETUP_DISMISSED;
         }
         
@@ -358,17 +437,23 @@ async function executeSnapCommands(mainWindow, resultCallback) {
       }
 
       if (stderr) {
-        console.warn('Warnings from combined commands:', stderr);
+        console.warn('Warnings from commands:', stderr);
       }
 
       if (stdout) {
-        console.log('Output from combined commands:', stdout);
+        console.log('Output from commands:', stdout);
       }
 
       // Success
       console.log('All camera and audio permissions activated successfully');
       resultCallback(mainWindow, true, ERROR_MESSAGES.SUCCESS_MESSAGE);
     });
+    
+    childProcess.on('error', (error) => {
+      console.error('Process spawn error:', error.message);
+      resultCallback(mainWindow, false, ERROR_MESSAGES.SYSTEM_ERROR.replace('{error}', error.message));
+    });
+    
   } catch (error) {
     console.error('Failed to detect sudo tool:', error);
     resultCallback(mainWindow, false, ERROR_MESSAGES.NO_SUDO_TOOL);
