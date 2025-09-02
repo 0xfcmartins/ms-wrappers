@@ -12,6 +12,24 @@ try {
     },
   });
 
+  contextBridge.exposeInMainWorld('electronAPI', {
+    sendScreenSharingStarted: (sourceId) =>
+      ipcRenderer.send("screen-sharing-started", sourceId),
+    sendScreenSharingStopped: () => ipcRenderer.send("screen-sharing-stopped"),
+    send: (channel, ...args) => {
+      if (
+        [
+          "active-screen-share-stream",
+          "screen-sharing-stopped",
+          "screen-sharing-started",
+          "proceed-camera-activation",
+        ].includes(channel)
+      ) {
+        return ipcRenderer.send(channel, ...args);
+      }
+    },
+  });
+
   ipcRenderer.send('preload-executed');
 
   function throttle(callback, delay) {

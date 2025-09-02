@@ -1,0 +1,129 @@
+/* Base styling */
+html,
+body,
+.sources-container {
+  background-color: #1b1a1a;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+}
+
+/* Header and navigation */
+.display-capture-header {
+  position: relative;
+  width: 100%;
+}
+
+.source-type-selector {
+  width: 100%;
+}
+
+.sources-container {
+  height: max-content;
+}
+
+.video-container {
+  padding-top: 1rem;
+  width: 100%;
+  cursor: pointer;
+}
+
+.video-container video {
+  width: 100%;
+  height: auto;
+  box-sizing: border-box;
+  box-shadow: 0 20px 10px rgb(0 0 0 / 50%);
+  transform: translateY(0px);
+}
+
+.video-container video.active {
+  border: 1px solid chocolate;
+}
+
+.video-container video:hover {
+  border: 2px solid brown;
+}
+
+.label-container {
+  width: 100%;
+  font-size: 1.5rem;
+  text-align: center;
+  overflow-wrap: break-word;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 5px;
+  background-color: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #373644;
+  border-radius: 5px;
+}
+
+/* Sources grid layout */
+.sources-grid {
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  display: flex;
+  max-height: 20rem;
+}
+
+.sources-grid [class^="col-"] {
+  max-width: 20rem;
+}
+
+.sources-container[data-view="screens"] .sources-grid [class^="col-"].window,
+.sources-container[data-view="windows"] .sources-grid [class^="col-"].screen {
+  display: none;
+}
+
+/* Close button styling */
+.close-button {
+  padding-top: 0.5rem;
+  padding-right: 1rem;
+  cursor: pointer;
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: inherit;
+}
+
+.close-button:hover {
+  color: brown;
+}
+
+.btn-group .btn {
+  height: 3rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+/* Quality selector styling */
+.quality-selector-container {
+  padding: 0.25rem 0.25rem 0 0.75rem;
+  display: flex;
+  align-items: center;
+}
+
+.quality-label {
+  margin-right: 1rem;
+  font-size: 1.5rem;
+  color: inherit;
+}
+
+#quality-select {
+  color: #fff;
+  background-color: #373644;
+  border: none;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.btn.btn-primary {
+  background-color: #373644;
+}
