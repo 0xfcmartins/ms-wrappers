@@ -9,8 +9,7 @@
    * @returns {boolean} - True if constraints indicate screen sharing
    */
   function isScreenShareConstraints(constraints) {
-    return constraints &&
-           constraints.video &&
+    return constraints?.video &&
            (constraints.video.chromeMediaSource === "desktop" ||
             constraints.video.mandatory?.chromeMediaSource === "desktop" ||
             constraints.video.chromeMediaSourceId ||
@@ -18,7 +17,7 @@
             (typeof constraints.video === "object" &&
              constraints.video.deviceId &&
              typeof constraints.video.deviceId === "object" &&
-             constraints.video.deviceId.exact));
+             constraints.video.deviceId?.exact));
   }
 
   /**
