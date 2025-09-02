@@ -303,10 +303,17 @@ function createErrorScript(message) {
 function detectSudoTool() {
   const tools = ['pkexec', 'gksudo', 'kdesu'];
   
+  // Security: Use a sanitized PATH containing only fixed, unwriteable directories
+  const securePath = '/usr/bin:/bin:/usr/local/bin:/usr/sbin:/sbin';
+  
   for (const tool of tools) {
     const result = spawnSync('which', [tool], {
       stdio: 'ignore',
-      encoding: 'utf8' 
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: securePath
+      }
     });
     
     if (result.status === 0) {
