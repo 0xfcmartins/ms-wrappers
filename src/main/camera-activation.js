@@ -383,7 +383,7 @@ async function executeSnapCommands(mainWindow, resultCallback) {
   showProgress(mainWindow);
 
   try {
-    const sudoTool = await detectSudoTool();
+    const sudoTool = detectSudoTool();
     
     // Security: Validate the sudo tool
     if (!validateSudoTool(sudoTool)) {
