@@ -22,7 +22,6 @@ try {
           "active-screen-share-stream",
           "screen-sharing-stopped",
           "screen-sharing-started",
-          "proceed-camera-activation",
         ].includes(channel)
       ) {
         return ipcRenderer.send(channel, ...args);
