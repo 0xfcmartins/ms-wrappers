@@ -1,6 +1,5 @@
-const { Tray, Menu, app, ipcMain } = require('electron');
+const { Tray, Menu, app} = require('electron');
 const fullAppConfig = require('../app-config.json');
-const { activateCameraPermissions, executeSnapCommands, showActivationResult } = require('./camera-activation');
 const { createKeepAliveMenuItem, cleanupKeepAlive } = require('./keep-alive');
 
 /**
@@ -14,15 +13,10 @@ const MENU_LABELS = {
   SHOW_DEV_TOOLS: 'Show Developer Tools',
   FORCE_RELOAD: 'Force Reload',
   MINIMIZE_TO_TRAY: 'Minimize to Tray',
-  ACTIVATE_CAMERA: 'Activate Camera',
   RESET_ZOOM: 'Reset Zoom',
   QUIT: 'Quit'
 };
 
-// IPC channel constants
-const IPC_CHANNELS = {
-  CAMERA_ACTIVATION: 'proceed-camera-activation'
-};
 
 /**
  * Creates the base menu template with common items
@@ -39,17 +33,6 @@ function createBaseMenuTemplate(mainWindow) {
   ];
 }
 
-/**
- * Creates the camera activation menu item
- * @param {BrowserWindow} mainWindow - The main application window
- * @returns {Object} Menu item object
- */
-function createCameraMenuItem(mainWindow) {
-  return {
-    label: MENU_LABELS.ACTIVATE_CAMERA,
-    click: () => activateCameraPermissions(mainWindow)
-  };
-}
 
 /**
  * Creates the end menu template items (zoom reset and quit)
@@ -89,7 +72,6 @@ function buildTrayMenu(tray, mainWindow, state, updateMenuCallback) {
   // Add teams-ew specific features if this is the teams-ew snap
   if (fullAppConfig.snapName === 'teams-ew') {
     menuTemplate.push(createKeepAliveMenuItem(state, mainWindow, updateMenuCallback));
-    menuTemplate.push(createCameraMenuItem(mainWindow));
   }
 
   menuTemplate.push(...createEndMenuTemplate(mainWindow));
@@ -114,25 +96,6 @@ function handleTrayClick(mainWindow) {
   }
 }
 
-/**
- * Sets up IPC handlers for camera activation
- * @param {BrowserWindow} mainWindow - The main application window
- * @returns {Function} Cleanup function to remove handlers
- */
-function setupIpcHandlers(mainWindow) {
-  const handleCameraActivation = () => {
-    console.log('Received camera activation confirmation from dialog');
-    // Execute snap commands directly to avoid infinite loop
-    executeSnapCommands(mainWindow, showActivationResult);
-  };
-  
-  ipcMain.on(IPC_CHANNELS.CAMERA_ACTIVATION, handleCameraActivation);
-  
-  // Return cleanup function
-  return () => {
-    ipcMain.removeListener(IPC_CHANNELS.CAMERA_ACTIVATION, handleCameraActivation);
-  };
-}
 
 /**
  * Sets up the system tray with all necessary functionality
@@ -155,12 +118,8 @@ async function setupTrayAsync(mainWindow, appConfig) {
     // Create menu update callback with self-reference
     const updateMenuCallback = () => buildTrayMenu(tray, mainWindow, state, updateMenuCallback);
 
-    // Set up IPC handlers and get cleanup function
-    const cleanupIpc = setupIpcHandlers(mainWindow);
-
     // Set up unified cleanup on app quit
     app.on('before-quit', () => {
-      cleanupIpc();
       cleanupKeepAlive(state);
     });
 
