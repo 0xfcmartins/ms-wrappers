@@ -13,6 +13,7 @@ try {
   });
 
   contextBridge.exposeInMainWorld('electronAPI', {
+    // Legacy screen sharing methods for compatibility
     sendScreenSharingStarted: (sourceId) =>
       ipcRenderer.send("screen-sharing-started", sourceId),
     sendScreenSharingStopped: () => ipcRenderer.send("screen-sharing-stopped"),
@@ -27,6 +28,66 @@ try {
         return ipcRenderer.send(channel, ...args);
       }
     },
+
+    // Enhanced screen sharing API
+    screenShare: {
+      /**
+       * Trigger screen share selection process
+       * @returns {Promise<boolean>} Success status
+       */
+      start: async () => {
+        try {
+          ipcRenderer.send('trigger-screen-share');
+          return true;
+        } catch (error) {
+          console.error('[ScreenShare API] Error starting screen share:', error);
+          return false;
+        }
+      },
+
+      /**
+       * Stop active screen sharing
+       * @returns {Promise<boolean>} Success status
+       */
+      stop: async () => {
+        try {
+          ipcRenderer.send('screen-sharing-stopped');
+          return true;
+        } catch (error) {
+          console.error('[ScreenShare API] Error stopping screen share:', error);
+          return false;
+        }
+      },
+
+      /**
+       * Get current screen sharing status
+       * @returns {Promise<boolean>} Active status
+       */
+      getStatus: async () => {
+        try {
+          return await ipcRenderer.invoke('get-screen-sharing-status');
+        } catch (error) {
+          console.error('[ScreenShare API] Error getting status:', error);
+          return false;
+        }
+      },
+
+      /**
+       * Subscribe to screen sharing status changes
+       * @param {Function} callback - Status change callback
+       */
+      onStatusChange: (callback) => {
+        const handler = (event, data) => {
+          callback(data?.isActive || false);
+        };
+        ipcRenderer.on('screen-sharing-status-changed', handler);
+        
+        // Return cleanup function
+        return () => {
+          ipcRenderer.removeListener('screen-sharing-status-changed', handler);
+        };
+      }
+    }
   });
 
   ipcRenderer.send('preload-executed');

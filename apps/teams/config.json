@@ -21,9 +21,7 @@
     "notifications",
     "storage",
     "activeTab",
-    "scripting",
-    "screen-wake-lock",
-    "window-management"
+    "scripting"
   ],
   "snapName": "teams-ew",
   "snapDescription": "Microsoft Teams web wrapper for Linux",
