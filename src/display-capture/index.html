@@ -7,34 +7,45 @@
     <link rel="stylesheet" href="index.css">
 </head>
 <body>
-    <div class="container">
-        <header class="display-capture-header">
+    <div id="obf-MainContainer" class="container">
+        <header class="obf-FormRatingContainer display-capture-header">
             <h1>Select a Screen or Window to Share</h1>
             <p>Choose what you want to share with meeting participants</p>
         </header>
-        
-        <main class="sources-container">
-            <div class="loading" id="loading">
-                <div class="spinner"></div>
+
+        <nav class="teams-tabs">
+            <button class="teams-tab active" data-tab="screens" id="screensTab">
+                <span class="teams-tab-icon"></span>
+                <span class="teams-tab-label">Screens</span>
+            </button>
+            <button class="teams-tab" data-tab="windows" id="windowsTab">
+                <span class="teams-tab-icon"></span>
+                <span class="teams-tab-label">Applications</span>
+            </button>
+        </nav>
+
+        <main class="teams-main sources-container">
+            <div class="teams-loading loading" id="loading">
+                <div class="teams-spinner spinner"></div>
                 <p>Loading available screens and windows...</p>
             </div>
-            
-            <div class="sources-grid" id="sourcesGrid" style="display: none;">
+
+            <div class="teams-grid sources-grid" id="sourcesGrid" style="display: none;">
                 <!-- Sources will be populated dynamically -->
             </div>
-            
-            <div class="no-sources" id="noSources" style="display: none;">
+
+            <div class="teams-empty no-sources" id="noSources" style="display: none;">
                 <p>No screens or windows available for sharing.</p>
                 <p>Please ensure you have granted screen recording permissions.</p>
             </div>
         </main>
-        
-        <footer class="actions">
-            <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
-            <button class="btn btn-primary" id="shareBtn" disabled>Share Selected</button>
+
+        <footer class="obf-FormSubmitButtonContainer actions">
+            <button class="obf-CancelButton btn btn-secondary" id="cancelBtn">Cancel</button>
+            <button class="obf-SubmitButton btn btn-primary" id="shareBtn" disabled>Share Selected</button>
         </footer>
     </div>
-    
+
     <script src="screenShare.js"></script>
 </body>
 </html>

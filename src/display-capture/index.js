@@ -1,6 +1,6 @@
 /**
  * StreamSelector - Unified screen sharing source selection
- * 
+ *
  * Provides a consistent interface for screen source selection that works with
  * both setDisplayMediaRequestHandler and legacy IPC patterns.
  */
@@ -13,14 +13,22 @@ let activeStreamSelector = null;
 
 // Set up global IPC handlers
 ipcMain.on('source-selected', (event, source) => {
-  if (activeStreamSelector) {
-    activeStreamSelector.handleSelection(source);
+  try {
+    if (activeStreamSelector) {
+      activeStreamSelector.handleSelection(source);
+    } else {
+      console.warn('[StreamSelector] No active selector for source selection');
+    }
+  } catch (error) {
+    console.error('[StreamSelector] Error handling source selection:', error);
   }
 });
 
 ipcMain.on('selection-cancelled', (event) => {
-  if (activeStreamSelector) {
-    activeStreamSelector.handleSelection(null);
+  try {
+      activeStreamSelector.handleSelection(null);
+  } catch (error) {
+    console.error('[StreamSelector] Error handling selection cancellation:', error);
   }
 });
 
@@ -37,9 +45,8 @@ class StreamSelector {
    * @param {Function} callback - Callback to execute with selected source
    */
   async show(callback) {
-    // Generate correlation ID for telemetry tracking
-    const correlationId = `ss-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[StreamSelector] Starting selection process [${correlationId}]`);
+    console.log('[StreamSelector] Starting selection process');
+
     if (this.pickerWindow) {
       // If picker is already open, focus it
       this.pickerWindow.focus();
@@ -47,42 +54,30 @@ class StreamSelector {
     }
 
     this.currentCallback = callback;
-    this.correlationId = correlationId;
-    
+
     // Set this instance as the active one for IPC handlers
     activeStreamSelector = this;
 
     try {
-      console.log(`[StreamSelector] Fetching desktop sources [${correlationId}]`);
+      console.log('[StreamSelector] Fetching desktop sources');
       // Get available sources
-      this.sources = await desktopCapturer.getSources({ 
-        types: ['window', 'screen'],
+      this.sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
         thumbnailSize: { width: 300, height: 200 }
       });
 
-      console.log(`[StreamSelector] Found ${this.sources.length} sources [${correlationId}]`);
+      console.log(`[StreamSelector] Found ${this.sources.length} sources`);
 
       if (this.sources.length === 0) {
-        console.error(`[StreamSelector] No desktop sources available [${correlationId}]`);
-        this.showUserFriendlyError('No screens or windows are available for sharing. Please check your system permissions.');
+        console.error('[StreamSelector] No desktop sources available');
+        this.handleSelection(null);
         return;
       }
 
       this.createPickerWindow();
     } catch (error) {
-      console.error(`[StreamSelector] Error getting desktop sources [${correlationId}]:`, error);
-      
-      // Provide user-friendly error messages based on error type
-      let userMessage = 'Unable to access screen sharing sources. ';
-      if (error.message?.includes('denied')) {
-        userMessage += 'Please grant screen recording permissions in your system settings.';
-      } else if (error.message?.includes('timeout')) {
-        userMessage += 'The system took too long to respond. Please try again.';
-      } else {
-        userMessage += 'Please restart the application or check your system settings.';
-      }
-      
-      this.showUserFriendlyError(userMessage);
+      console.error('[StreamSelector] Error getting desktop sources:', error);
+      this.handleSelection(null);
     }
   }
 
@@ -92,6 +87,8 @@ class StreamSelector {
       height: 600,
       modal: true,
       parent: this.parentWindow,
+      frame: false,
+      resizable: true,
       webPreferences: {
         nodeIntegration: false,
         contextIsolation: true,
@@ -105,53 +102,52 @@ class StreamSelector {
 
     this.pickerWindow.once('ready-to-show', () => {
       this.pickerWindow.show();
-      // Send sources to renderer
-      this.pickerWindow.webContents.send('sources-available', this.sources);
+      // Send serializable sources to renderer
+      const serializableSources = this.sources.map(source => ({
+        id: source.id,
+        name: source.name,
+        display_id: source.display_id,
+        thumbnail: source.thumbnail.toDataURL(),
+        appIcon: source.appIcon ? source.appIcon.toDataURL() : null
+      }));
+      this.pickerWindow.webContents.send('sources-available', serializableSources);
     });
 
     this.pickerWindow.on('closed', () => {
       this.pickerWindow = null;
-      // If window was closed without selection, call callback with null
-      if (this.currentCallback) {
-        this.handleSelection(null);
-      }
     });
   }
 
   handleSelection(selectedSource) {
-    const correlationId = this.correlationId || 'unknown';
-    
     if (selectedSource) {
-      console.log(`[StreamSelector] Selection completed: ${selectedSource.name} (${selectedSource.id}) [${correlationId}]`);
-      
+      console.log(`[StreamSelector] Selection completed: ${selectedSource.name} (${selectedSource.id})`);
+
       // Map the serialized source back to the original DesktopCapturerSource
-      // This ensures we have the full object with all required properties
       const originalSource = this.sources.find(source => source.id === selectedSource.id);
       if (originalSource) {
         selectedSource = originalSource;
-        console.log(`[StreamSelector] Mapped to original source object [${correlationId}]`);
+        console.log(`[StreamSelector] Mapped to original source object`);
       } else {
-        console.warn(`[StreamSelector] Could not find original source for ID: ${selectedSource.id} [${correlationId}]`);
+        console.warn(`[StreamSelector] Could not find original source for ID: ${selectedSource.id}`);
       }
     } else {
-      console.log(`[StreamSelector] Selection cancelled or failed [${correlationId}]`);
+      console.log(`[StreamSelector] Selection cancelled or failed`);
     }
-    
+
     if (this.currentCallback) {
       const callback = this.currentCallback;
       this.currentCallback = null;
-      this.correlationId = null;
-      
+
       // Clear the active stream selector reference
       if (activeStreamSelector === this) {
         activeStreamSelector = null;
       }
-      
+
       // Close picker window if open
       if (this.pickerWindow && !this.pickerWindow.isDestroyed()) {
         this.pickerWindow.close();
       }
-      
+
       callback(selectedSource);
     }
   }
@@ -163,11 +159,11 @@ class StreamSelector {
   showUserFriendlyError(message) {
     const correlationId = this.correlationId || 'unknown';
     console.error(`[StreamSelector] User error: ${message} [${correlationId}]`);
-    
+
     // For now, we'll handle this by calling the callback with null
     // In the future, this could show a proper error dialog
     this.handleSelection(null);
-    
+
     // Could also emit an event or show a dialog here
     if (this.parentWindow && !this.parentWindow.isDestroyed()) {
       // Send error notification to main window for user display

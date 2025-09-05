@@ -27,10 +27,7 @@ const displayCaptureDir = path.join(tempDir, 'display-capture');
 fs.mkdirSync(displayCaptureDir, { recursive: true });
 fs.cpSync(path.join(__dirname, 'src', 'display-capture'), displayCaptureDir, { recursive: true });
 
-// Copy preview module
-const previewDir = path.join(tempDir, 'preview');
-fs.mkdirSync(previewDir, { recursive: true });
-fs.cpSync(path.join(__dirname, 'src', 'preview'), previewDir, { recursive: true });
+
 
 // Copy security module
 const securityDir = path.join(tempDir, 'security');

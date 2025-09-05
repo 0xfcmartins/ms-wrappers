@@ -12,83 +12,67 @@ try {
     },
   });
 
-  contextBridge.exposeInMainWorld('electronAPI', {
-    // Legacy screen sharing methods for compatibility
-    sendScreenSharingStarted: (sourceId) =>
-      ipcRenderer.send("screen-sharing-started", sourceId),
-    sendScreenSharingStopped: () => ipcRenderer.send("screen-sharing-stopped"),
-    send: (channel, ...args) => {
-      if (
-        [
-          "active-screen-share-stream",
-          "screen-sharing-stopped",
-          "screen-sharing-started",
-        ].includes(channel)
-      ) {
-        return ipcRenderer.send(channel, ...args);
-      }
-    },
+  const { contextBridge, ipcRenderer } = require('electron');
+const { allowedChannels } = require('../security/ipcValidator');
 
-    // Enhanced screen sharing API
-    screenShare: {
-      /**
-       * Trigger screen share selection process
-       * @returns {Promise<boolean>} Success status
-       */
-      start: async () => {
-        try {
-          ipcRenderer.send('trigger-screen-share');
-          return true;
-        } catch (error) {
-          console.error('[ScreenShare API] Error starting screen share:', error);
-          return false;
-        }
-      },
+// IPC Security: Create a safe wrapper for ipcRenderer.send
+const send = (channel, data) => {
+  if (allowedChannels.has(channel)) {
+    ipcRenderer.send(channel, data);
+  } else {
+    console.error(`[IPC Security] Blocked send to unauthorized channel: ${channel}`);
+  }
+};
 
-      /**
-       * Stop active screen sharing
-       * @returns {Promise<boolean>} Success status
-       */
-      stop: async () => {
-        try {
-          ipcRenderer.send('screen-sharing-stopped');
-          return true;
-        } catch (error) {
-          console.error('[ScreenShare API] Error stopping screen share:', error);
-          return false;
-        }
-      },
+// IPC Security: Create a safe wrapper for ipcRenderer.invoke
+const invoke = async (channel, data) => {
+  if (allowedChannels.has(channel)) {
+    return await ipcRenderer.invoke(channel, data);
+  } else {
+    console.error(`[IPC Security] Blocked invoke to unauthorized channel: ${channel}`);
+    throw new Error(`Unauthorized IPC channel: ${channel}`);
+  }
+};
 
-      /**
-       * Get current screen sharing status
-       * @returns {Promise<boolean>} Active status
-       */
-      getStatus: async () => {
-        try {
-          return await ipcRenderer.invoke('get-screen-sharing-status');
-        } catch (error) {
-          console.error('[ScreenShare API] Error getting status:', error);
-          return false;
-        }
-      },
+// IPC Security: Create a safe wrapper for ipcRenderer.on
+const on = (channel, func) => {
+  if (allowedChannels.has(channel)) {
+    // Deliberately strip event as it includes `sender`
+    const subscription = (event, ...args) => func(...args);
+    ipcRenderer.on(channel, subscription);
+    
+    // Return a cleanup function
+    return () => {
+      ipcRenderer.removeListener(channel, subscription);
+    };
+  } else {
+    console.error(`[IPC Security] Blocked listener for unauthorized channel: ${channel}`);
+    return () => {}; // Return a no-op cleanup function
+  }
+};
 
-      /**
-       * Subscribe to screen sharing status changes
-       * @param {Function} callback - Status change callback
-       */
-      onStatusChange: (callback) => {
-        const handler = (event, data) => {
-          callback(data?.isActive || false);
-        };
-        ipcRenderer.on('screen-sharing-status-changed', handler);
-        
-        // Return cleanup function
-        return () => {
-          ipcRenderer.removeListener('screen-sharing-status-changed', handler);
-        };
-      }
-    }
-  });
+contextBridge.exposeInMainWorld('electron', {
+  send,
+  invoke,
+  on,
+  zoomChange: (direction) => send('zoom-change', direction),
+  
+  // Screen sharing API
+  screenShare: {
+    trigger: () => invoke('trigger-screen-share'),
+    stop: () => send('screen-sharing-stopped'),
+    getStatus: () => invoke('get-screen-sharing-status'),
+    getStreamId: () => invoke('get-screen-share-stream'),
+    getScreen: () => invoke('get-screen-share-screen'),
+    onSourceSelected: (callback) => on('screen-sharing-source-selected', callback),
+    onStatusChanged: (callback) => on('screen-sharing-status-changed', callback),
+  },
+
+  // Notification API
+  notifications: {
+    onNew: (callback) => on('new-notification', callback),
+  },
+});
 
   ipcRenderer.send('preload-executed');
 

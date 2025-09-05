@@ -45,7 +45,6 @@ const path = require('path');
 const windowStateKeeper = require('electron-window-state');
 const { validateIpcChannel, allowedChannels } = require('./security/ipcValidator');
 const { StreamSelector } = require('./display-capture');
-const previewWindow = require('./preview');
 
 // IPC Security: Add validation wrappers for all IPC handlers
 const originalIpcHandle = ipcMain.handle.bind(ipcMain);
@@ -280,29 +279,29 @@ if (!gotTheLock) {
     console.log('[ScreenShare] Setting up StreamSelector for screen sharing...');
     const streamSelector = new StreamSelector(mainWindow);
     
-    mainWindow.webContents.session.setDisplayMediaRequestHandler(
-      (_request, callback) => {
-        console.log('[ScreenShare] Display media request received');
-        
-        streamSelector.show((selectedSource) => {
+    // Track requests to prevent camera interference but allow legitimate screen sharing
+    let lastRequestTime = 0;
+    let requestCount = 0;
+
+    mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+      console.log('[ScreenShare] Display media request received');
+
+      streamSelector.show((selectedSource) => {
+        try {
           if (selectedSource) {
             console.log(`[ScreenShare] Source selected: ${selectedSource.name} (${selectedSource.id})`);
-            // Set up screen sharing state
             global.selectedScreenShareSource = selectedSource;
-            
-            // Create and show preview window after successful selection
-            previewWindow.create(selectedSource);
-            
-            // Use proper audio parameter format per Electron: 'loopback' captures system audio
             callback({ video: selectedSource, audio: 'loopback' });
           } else {
-            console.log('[ScreenShare] Selection cancelled or failed');
-            // Proper cancellation format: empty object
-            callback({});
+            console.log('[ScreenShare] Selection cancelled by user');
+            callback({ video: null, audio: null });
           }
-        });
-      }
-    );
+        } catch (error) {
+          console.error('[ScreenShare] Error during source selection:', error);
+          callback({ video: null, audio: null });
+          }
+      });
+    });
 
     mainWindow.webContents.on('console-message', (event) => {
       const { message } = event;
@@ -545,70 +544,42 @@ if (!gotTheLock) {
         return;
       }
 
-      // Use the same StreamSelector flow as setDisplayMediaRequestHandler
-      const { StreamSelector } = require('./display-capture');
-      const streamSelector = new StreamSelector(mainWindow);
-      
+      // Use StreamSelector for source selection
       streamSelector.show((selectedSource) => {
         if (selectedSource) {
           console.log(`[ScreenShare] Source selected via API: ${selectedSource.name} (${selectedSource.id})`);
           // Set up screen sharing state
           global.selectedScreenShareSource = selectedSource;
-          
-          // Create and show preview window
-          previewWindow.create(selectedSource);
-          
-          // Notify renderer of successful start
-          mainWindow.webContents.send("screen-sharing-status-changed", { isActive: true });
+
+          // Send the selected source back to renderer for Teams to use
+          mainWindow.webContents.send("screen-sharing-source-selected", {
+            sourceId: selectedSource.id,
+            sourceName: selectedSource.name,
+            isActive: true
+          });
         } else {
           console.log('[ScreenShare] Selection cancelled via API');
-          // Notify renderer of cancelled selection
-          mainWindow.webContents.send("screen-sharing-status-changed", { isActive: false });
+          // Notify renderer of cancelled selection - this won't interfere with camera
+          mainWindow.webContents.send("screen-sharing-source-selected", { 
+            isActive: false,
+            cancelled: true 
+          });
         }
       });
     });
 
-    // Handle screen sharing stopped - clear state and close preview
+    // Handle screen sharing stopped - clear state
     ipcMain.on("screen-sharing-stopped", () => {
       console.log('[ScreenShare] Screen sharing stopped');
       global.selectedScreenShareSource = null;
 
-      // Close preview window when screen sharing stops
-      if (previewWindow.isOpen()) {
-        previewWindow.updateStatus(false);
+      if (previewWindow) {
         previewWindow.close();
       }
-    });
 
-    // Handle preview window resize requests with constraints
-    ipcMain.on("resize-preview-window", (event, { width, height }) => {
-      console.log(`[ScreenShare] Preview resize requested: ${width}x${height}`);
-      if (previewWindow.isOpen()) {
-        previewWindow.resize(width, height);
-      }
-    });
-
-    // Handle stop screen sharing from preview thumbnail
-    ipcMain.on("stop-screen-sharing-from-thumbnail", () => {
-      console.log('[ScreenShare] Stop screen sharing requested from preview');
-      global.selectedScreenShareSource = null;
-      
-      // Update preview status and close
-      if (previewWindow.isOpen()) {
-        previewWindow.updateStatus(false);
-      }
-      
       // Notify renderer process of status change
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("screen-sharing-status-changed", { isActive: false });
-      }
-    });
-
-    // Handle minimize preview window
-    ipcMain.on("minimize-preview-window", () => {
-      console.log('[ScreenShare] Preview minimize requested');
-      if (previewWindow.isOpen()) {
-        previewWindow.hide();
       }
     });
 
@@ -632,13 +603,6 @@ if (!gotTheLock) {
           if (!sourceExists) {
             console.warn('[ScreenShare] Selected source no longer available, clearing state');
             global.selectedScreenShareSource = null;
-            
-            // Close preview window if source is no longer available
-            if (previewWindow.isOpen()) {
-              previewWindow.updateStatus(false);
-              previewWindow.close();
-            }
-            
             return null;
           }
         } catch (error) {
@@ -701,6 +665,8 @@ if (!gotTheLock) {
 
   app.on('window-all-closed', () => {
     globalShortcut.unregisterAll();
+
+
     if (process.platform !== 'darwin') {
       app.quit();
     }

@@ -16,12 +16,13 @@
     "clipboard-read",
     "clipboard-write",
     "audio-record",
-    "audio-playback",
     "camera",
     "notifications",
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "screen-wake-lock",
+    "window-management"
   ],
   "snapName": "teams-ew",
   "snapDescription": "Microsoft Teams web wrapper for Linux",
