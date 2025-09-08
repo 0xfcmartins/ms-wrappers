@@ -276,7 +276,6 @@ class ScreenSourceSelector {
     // Handle Enter key on share button
     if (e.key === 'Enter' && document.activeElement === this.shareBtn) {
       this.handleShare();
-      return;
     }
   }
 

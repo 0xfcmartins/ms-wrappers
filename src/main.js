@@ -278,10 +278,6 @@ if (!gotTheLock) {
     // Set up unified screen sharing with StreamSelector as primary path
     console.log('[ScreenShare] Setting up StreamSelector for screen sharing...');
     const streamSelector = new StreamSelector(mainWindow);
-    
-    // Track requests to prevent camera interference but allow legitimate screen sharing
-    let lastRequestTime = 0;
-    let requestCount = 0;
 
     mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
       console.log('[ScreenShare] Display media request received');

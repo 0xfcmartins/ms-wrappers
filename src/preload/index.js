@@ -1,5 +1,6 @@
 try {
   const { contextBridge, ipcRenderer } = require('electron');
+  const { allowedChannels } = require('../security/ipcValidator');
 
   contextBridge.exposeInMainWorld('api', {
     send: (channel, data) => {
@@ -12,8 +13,6 @@ try {
     },
   });
 
-  const { contextBridge, ipcRenderer } = require('electron');
-const { allowedChannels } = require('../security/ipcValidator');
 
 // IPC Security: Create a safe wrapper for ipcRenderer.send
 const send = (channel, data) => {
@@ -40,7 +39,7 @@ const on = (channel, func) => {
     // Deliberately strip event as it includes `sender`
     const subscription = (event, ...args) => func(...args);
     ipcRenderer.on(channel, subscription);
-    
+
     // Return a cleanup function
     return () => {
       ipcRenderer.removeListener(channel, subscription);
@@ -56,7 +55,7 @@ contextBridge.exposeInMainWorld('electron', {
   invoke,
   on,
   zoomChange: (direction) => send('zoom-change', direction),
-  
+
   // Screen sharing API
   screenShare: {
     trigger: () => invoke('trigger-screen-share'),
