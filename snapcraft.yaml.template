@@ -1,5 +1,5 @@
 name: {{APP_NAME}}
-version: 1.0.0
+version: 1.0.5
 summary: Web wrapper for {{DESKTOP_NAME}}
 description: |
   {{APP_DESCRIPTION}}
@@ -10,26 +10,47 @@ confinement: strict
 base: core22
 
 apps:
-    {{APP_NAME}}:
-      command: bin/desktop-launch electron $SNAP/app/main.js
-      desktop: usr/share/applications/{{APP_NAME}}.desktop
-      extensions: [gnome]
-      environment:
-        ELECTRON_ENABLE_LOGGING: "true"
-        ICU_DATA_DIR: "$SNAP/usr/share/icu"
-      plugs:
-        - network
-        - camera
-        - audio-playback
-        - audio-record
-        - pulseaudio
-        - alsa
-        - desktop
-        - desktop-legacy
-        - home
-        - removable-media
-        - opengl
-        - browser-support
+  {{APP_NAME}}:
+    command: bin/desktop-launch electron $SNAP/main.js
+    desktop: usr/share/applications/{{APP_NAME}}.desktop
+    extensions: [gnome]
+    environment:
+      ELECTRON_ENABLE_LOGGING: "true"
+      ELECTRON_DISABLE_SECURITY_WARNINGS: "true"
+      ICU_DATA_DIR: "$SNAP/usr/share/icu"
+      # Ensure proper display and D-Bus access
+      TMPDIR: "$SNAP_USER_DATA"
+    plugs:
+      - network
+      - network-bind
+      - camera
+      - audio-playback
+      - audio-record
+      - pulseaudio
+      - alsa
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - unity7
+      - home
+      - removable-media
+      - opengl
+      - browser-support
+      - process-control
+      - system-observe
+      - hardware-observe
+      - network-manager-observe
+      - screen-inhibit-control
+      # Critical for fixing your errors:
+      - dbus
+      - system-files
+
+interfaces:
+  system-files:
+    read:
+      - /var/run/dbus/system_bus_socket
+      - /run/dbus/system_bus_socket
 
 parts:
   application:
@@ -45,8 +66,25 @@ parts:
       - libpulse0
       - libgtk-3-0
       - libicu70
+      - libxrandr2
+      - libasound2
+      - libxtst6
+      - libxcomposite1
+      - libxcursor1
+      - libxdamage1
+      - libxfixes3
+      - libxi6
+      - libatk-bridge2.0-0
+      - libdrm2
+      - libatspi2.0-0
+      - libgtk-3-0
+      - libgdk-pixbuf2.0-0
+    override-build: |
+      snapcraftctl build
+      # Create the app directory structure expected by the command
+      mkdir -p $SNAPCRAFT_PART_INSTALL/app
 
-electron:
+  electron:
   plugin: dump
   source: https://github.com/electron/electron/releases/download/v35.1.2/electron-v35.1.2-linux-x64.zip
   source-type: zip
@@ -76,18 +114,41 @@ electron:
     done
 
     cat > $SNAPCRAFT_PART_INSTALL/bin/desktop-launch << 'EOF'
-    #!/bin/bash
+      #!/bin/bash
+      
+      # Snap-specific environment setup
+      export LD_LIBRARY_PATH="$SNAP/usr/lib:$LD_LIBRARY_PATH"
+      export ICU_DATA_DIR="$SNAP/usr/share/icu"
+      
+      # Ensure proper tmp directory
+      export TMPDIR="$SNAP_USER_DATA/tmp"
+      mkdir -p "$TMPDIR"
+      
+      # Electron flags for Snap environment
+      export ELECTRON_FLAGS="--icu-data-dir=$SNAP/usr/share/icu 
+                             --v8-snapshot-blob-path=$SNAP/bin/snapshot_blob.bin 
+                             --v8-context-snapshot-path=$SNAP/bin/v8_context_snapshot.bin
+                             --no-sandbox
+                             --disable-dev-shm-usage
+                             --disable-setuid-sandbox"
+      
+      # Set up D-Bus if not available
+      if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+        if command -v dbus-launch >/dev/null 2>&1; then
+          eval $(dbus-launch --sh-syntax)
+          export DBUS_SESSION_BUS_ADDRESS
+        fi
+      fi
+      
+      # Ensure display is set
+      if [ -z "$DISPLAY" ] && [ "$XDG_SESSION_TYPE" != "wayland" ]; then
+        export DISPLAY=:0
+      fi
+      
+      exec "$@" $ELECTRON_FLAGS
+      EOF
 
-    export LD_LIBRARY_PATH="$SNAP/usr/lib:$LD_LIBRARY_PATH"
-    export ICU_DATA_DIR="$SNAP/usr/share/icu"
-    export ELECTRON_FLAGS="--icu-data-dir=$SNAP/usr/share/icu 
-                           --v8-snapshot-blob-path=$SNAP/bin/snapshot_blob.bin 
-                           --v8-context-snapshot-path=$SNAP/bin/v8_context_snapshot.bin"
-    
-    exec "$@" $ELECTRON_FLAGS
-    EOF
-
-    chmod +x $SNAPCRAFT_PART_INSTALL/bin/desktop-launch
+      chmod +x $SNAPCRAFT_PART_INSTALL/bin/desktop-launch
 
   prime:
     - bin/electron

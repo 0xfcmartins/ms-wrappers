@@ -85,17 +85,72 @@ app.name = appConfig.name;
 
 const isSnap = process.env.SNAP && process.env.SNAPCRAFT_PROJECT_NAME;
 
-if (!isSnap) {
+// Define shouldDisableHardwareAcceleration in the proper scope
+let shouldDisableHardwareAcceleration;
+
+// Enhanced Snap environment detection and setup
+if (isSnap) {
+  console.info('Running in Snap environment, applying Snap-specific configurations...');
+  
+  // Snap-specific environment setup
+  app.commandLine.appendSwitch('no-sandbox');
+  app.commandLine.appendSwitch('disable-dev-shm-usage');
+  app.commandLine.appendSwitch('disable-setuid-sandbox');
+  
+  // Use user data directory for temporary files in Snap
+  if (process.env.SNAP_USER_DATA) {
+    const tmpDir = path.join(process.env.SNAP_USER_DATA, 'tmp');
+    require('fs').mkdirSync(tmpDir, { recursive: true });
+    process.env.TMPDIR = tmpDir;
+  }
+  
+  // Ensure D-Bus access in Snap environment
+  if (!process.env.DBUS_SESSION_BUS_ADDRESS) {
+    console.warn('[Snap] D-Bus session not available, some features may be limited');
+  }
+  
+  // Always disable hardware acceleration in Snap to avoid graphics issues
+  shouldDisableHardwareAcceleration = true;
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch('disable-gpu-rasterization');
-  app.commandLine.appendSwitch('disable-zero-copy');
-  app.commandLine.appendSwitch('disable-software-rasterizer');
+  app.commandLine.appendSwitch('disable-gpu-compositing');
+} else {
+  // Only disable hardware acceleration in specific problematic environments for non-Snap
+  shouldDisableHardwareAcceleration = (
+    // Disable for SSH/remote sessions without proper display
+    process.env.SSH_CLIENT || 
+    process.env.SSH_TTY ||
+    // Disable if no display is available
+    !process.env.DISPLAY ||
+    // Disable for older/problematic GPU drivers (can be enabled via flag)
+    process.env.DISABLE_GPU === 'true'
+  );
+
+  if (shouldDisableHardwareAcceleration) {
+    console.info('Disabling hardware acceleration due to environment constraints');
+    app.disableHardwareAcceleration();
+    app.commandLine.appendSwitch('disable-gpu-rasterization');
+    app.commandLine.appendSwitch('disable-zero-copy');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
+  } else {
+    console.info('Hardware acceleration enabled');
+  }
 }
 
 if (process.platform === 'linux') {
-  app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
-  app.commandLine.appendSwitch('ignore-gpu-blacklist');
-  app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
+  // Add Linux-specific flags for better compatibility
+  if (!isSnap) {
+    // Only add these for non-Snap environments since Snap handles sandboxing differently
+    app.commandLine.appendSwitch('no-sandbox');
+    app.commandLine.appendSwitch('disable-dev-shm-usage');
+  }
+  
+  // Only add problematic flags if hardware acceleration is disabled or in Snap
+  if (isSnap || shouldDisableHardwareAcceleration) {
+    app.commandLine.appendSwitch('disable-features', 'VaapiVideoDecoder');
+    app.commandLine.appendSwitch('ignore-gpu-blacklist');
+    app.commandLine.appendSwitch('enable-native-gpu-memory-buffers');
+  }
 }
 
 app.commandLine.appendSwitch('disable-features', 'InPrivateMode');
@@ -103,21 +158,37 @@ app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
 // Environment-aware media flags - Wayland-specific optimization for Linux desktop environments
 // PipeWire provides better screen sharing and audio capture on Wayland
-if (process.env.XDG_SESSION_TYPE === 'wayland') {
-  console.info('Running under Wayland, enabling PipeWire support...');
+if (process.platform === 'linux') {
+  // Detect display server type
+  const displayServer = process.env.XDG_SESSION_TYPE || 'x11';
+  console.info(`Running on ${displayServer} display server`);
   
-  const features = app.commandLine.hasSwitch('enable-features')
-    ? app.commandLine.getSwitchValue('enable-features').split(',')
-    : ['WebRTC-H264WithOpenH264FFFmpeg'];
-  
-  if (!features.includes('WebRTCPipeWireCapturer')) {
-    features.push('WebRTCPipeWireCapturer');
+  if (displayServer === 'wayland') {
+    console.info('Running under Wayland, enabling PipeWire support...');
+    
+    const features = app.commandLine.hasSwitch('enable-features')
+      ? app.commandLine.getSwitchValue('enable-features').split(',')
+      : ['WebRTC-H264WithOpenH264FFFmpeg'];
+    
+    if (!features.includes('WebRTCPipeWireCapturer')) {
+      features.push('WebRTCPipeWireCapturer');
+    }
+    
+    app.commandLine.appendSwitch('enable-features', features.join(','));
+    app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
+  } else {
+    // X11 or other display servers
+    app.commandLine.appendSwitch('enable-features', 'WebRTC-H264WithOpenH264FFFmpeg');
   }
   
-  app.commandLine.appendSwitch('enable-features', features.join(','));
-  app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
+  // Ensure DISPLAY is set for X11 applications
+  if (!process.env.DISPLAY && displayServer !== 'wayland') {
+    console.warn('DISPLAY environment variable not set. This may cause issues with X11 applications.');
+    // Try to set a default display
+    process.env.DISPLAY = ':0';
+  }
 } else {
-  // Non-Wayland environments: enable H264 support only
+  // Non-Linux environments: enable H264 support only
   app.commandLine.appendSwitch('enable-features', 'WebRTC-H264WithOpenH264FFFmpeg');
 }
 
