@@ -16,7 +16,6 @@
     "clipboard-read",
     "clipboard-write",
     "audio-record",
-    "audio-playback",
     "camera",
     "notifications",
     "storage",

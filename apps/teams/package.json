@@ -36,7 +36,7 @@
       }
     },
     "snap": {
-      "plugs": ["default", "camera", "audio-playback", "audio-record"]
+      "plugs": [ "camera", "audio-playback", "audio-record"]
     }
   }
 }

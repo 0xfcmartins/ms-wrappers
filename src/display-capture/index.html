@@ -1,51 +1,51 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8"/>
-    <meta http-equiv="X-UA-Compatible" content="IE=edge"/>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>Display Capture - Select Source</title>
-    <link rel="stylesheet" href="../assets/css/bootstrap.min.css"/>
-    <link rel="stylesheet" href="../assets/css/bootstrap.superhero.min.css"/>
-    <link rel="stylesheet" href="../assets/css/bootstrap-icons.css"/>
-    <link rel="stylesheet" href="./index.css"/>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Select Screen to Share</title>
+    <link rel="stylesheet" href="index.css">
 </head>
-
 <body>
-    <header class="display-capture-header">
-        <div class="source-type-selector btn-group" role="tablist" aria-label="Source type selection">
-             <button class="btn btn-secondary" 
-                     id="screens-tab" 
-                     data-view="screens" 
-                     role="tab"
-                     aria-selected="false"
-                     aria-controls="screens-panel">
-                 Screens
-             </button>
-             <button class="btn btn-primary" 
-                     id="windows-tab" 
-                     data-view="windows" 
-                     role="tab"
-                     aria-selected="true"
-                     aria-controls="windows-panel">
-                 Windows
-             </button>
-             <div class="quality-selector-container">
-                 <label for="quality-select" class="quality-label">Quality</label>
-                 <select id="quality-select" 
-                         class="ml-2 form-control-md" 
-                         aria-label="Select capture quality"></select>
-             </div>
-        </div>
-        
-        <button class="close-button bi bi-x-lg" 
-                id="close-interface" 
-                aria-label="Close interface"
-                title="Close interface"></button>
-    </header>
+    <div id="obf-MainContainer" class="container">
+        <header class="obf-FormRatingContainer display-capture-header">
+            <h1>Select a Screen or Window to Share</h1>
+            <p>Choose what you want to share with meeting participants</p>
+        </header>
 
-    <main class="sources-container container-fluid" data-view="screens">
-        <div class="sources-grid row" aria-labelledby="windows-tab"></div>
-    </main>
+        <nav class="teams-tabs">
+            <button class="teams-tab active" data-tab="screens" id="screensTab">
+                <span class="teams-tab-icon"></span>
+                <span class="teams-tab-label">Screens</span>
+            </button>
+            <button class="teams-tab" data-tab="windows" id="windowsTab">
+                <span class="teams-tab-icon"></span>
+                <span class="teams-tab-label">Applications</span>
+            </button>
+        </nav>
+
+        <main class="teams-main sources-container">
+            <div class="teams-loading loading" id="loading">
+                <div class="teams-spinner spinner"></div>
+                <p>Loading available screens and windows...</p>
+            </div>
+
+            <div class="teams-grid sources-grid" id="sourcesGrid" style="display: none;">
+                <!-- Sources will be populated dynamically -->
+            </div>
+
+            <div class="teams-empty no-sources" id="noSources" style="display: none;">
+                <p>No screens or windows available for sharing.</p>
+                <p>Please ensure you have granted screen recording permissions.</p>
+            </div>
+        </main>
+
+        <footer class="obf-FormSubmitButtonContainer actions">
+            <button class="obf-CancelButton btn btn-secondary" id="cancelBtn">Cancel</button>
+            <button class="obf-SubmitButton btn btn-primary" id="shareBtn" disabled>Share Selected</button>
+        </footer>
+    </div>
+
+    <script src="screenShare.js"></script>
 </body>
 </html>

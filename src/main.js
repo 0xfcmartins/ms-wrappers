@@ -43,7 +43,32 @@ const appConfig = require('./app-config.json');
 const {app, ipcMain, BrowserWindow, dialog, session, globalShortcut, desktopCapturer} = require('electron');
 const path = require('path');
 const windowStateKeeper = require('electron-window-state');
+const { validateIpcChannel, allowedChannels } = require('./security/ipcValidator');
 const { StreamSelector } = require('./display-capture');
+
+// IPC Security: Add validation wrappers for all IPC handlers
+const originalIpcHandle = ipcMain.handle.bind(ipcMain);
+const originalIpcOn = ipcMain.on.bind(ipcMain);
+
+ipcMain.handle = (channel, handler) => {
+  return originalIpcHandle(channel, (event, ...args) => {
+    if (!validateIpcChannel(channel, args.length > 0 ? args[0] : null)) {
+      console.error(`[IPC Security] Rejected handle request for channel: ${channel}`);
+      return Promise.reject(new Error(`Unauthorized IPC channel: ${channel}`));
+    }
+    return handler(event, ...args);
+  });
+};
+
+ipcMain.on = (channel, handler) => {
+  return originalIpcOn(channel, (event, ...args) => {
+    if (!validateIpcChannel(channel, args.length > 0 ? args[0] : null)) {
+      console.error(`[IPC Security] Rejected event for channel: ${channel}`);
+      return;
+    }
+    return handler(event, ...args);
+  });
+};
 
 let setupTray, setupNotifications;
 
@@ -76,13 +101,30 @@ if (process.platform === 'linux') {
 app.commandLine.appendSwitch('disable-features', 'InPrivateMode');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-if (!isSnap) {
+// Environment-aware media flags - Wayland-specific optimization for Linux desktop environments
+// PipeWire provides better screen sharing and audio capture on Wayland
+if (process.env.XDG_SESSION_TYPE === 'wayland') {
+  console.info('Running under Wayland, enabling PipeWire support...');
+  
+  const features = app.commandLine.hasSwitch('enable-features')
+    ? app.commandLine.getSwitchValue('enable-features').split(',')
+    : ['WebRTC-H264WithOpenH264FFFmpeg'];
+  
+  if (!features.includes('WebRTCPipeWireCapturer')) {
+    features.push('WebRTCPipeWireCapturer');
+  }
+  
+  app.commandLine.appendSwitch('enable-features', features.join(','));
   app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
+} else {
+  // Non-Wayland environments: enable H264 support only
+  app.commandLine.appendSwitch('enable-features', 'WebRTC-H264WithOpenH264FFFmpeg');
 }
 
-app.commandLine.appendSwitch('enable-features', 'WebRTC-H264WithOpenH264FFFmpeg');
-app.commandLine.appendSwitch('enable-features', 'WebRTCPipeWireCapturer');
-app.commandLine.appendSwitch('enable-webrtc-logs');
+// WebRTC logs only in development mode
+if (process.env.NODE_ENV === 'development') {
+  app.commandLine.appendSwitch('enable-webrtc-logs');
+}
 
 if (process.platform === 'win32') {
   app.setAppUserModelId(appConfig.name);
@@ -233,50 +275,29 @@ if (!gotTheLock) {
       callback(allowed);
     });
 
-    console.log('Setting up screen sharing with StreamSelector...');
+    // Set up unified screen sharing with StreamSelector as primary path
+    console.log('[ScreenShare] Setting up StreamSelector for screen sharing...');
     const streamSelector = new StreamSelector(mainWindow);
-    
-    mainWindow.webContents.session.setDisplayMediaRequestHandler(
-      (_request, callback) => {
-        streamSelector.show((source) => {
-          if (source) {
-            handleScreenSourceSelection(source, callback);
-          } else {
-            callback({ video: null, audio: false });
-          }
-        });
-      }
-    );
 
-    function handleScreenSourceSelection(source, callback) {
-      desktopCapturer
-        .getSources({ types: ["window", "screen"] })
-        .then((sources) => {
-          const selectedSource = findSelectedSource(sources, source);
+    mainWindow.webContents.session.setDisplayMediaRequestHandler((request, callback) => {
+      console.log('[ScreenShare] Display media request received');
+
+      streamSelector.show((selectedSource) => {
+        try {
           if (selectedSource) {
-            setupScreenSharing(selectedSource);
-            console.log('Screen sharing started with source:', selectedSource.id);
-            callback({ video: selectedSource, audio: false });
+            console.log(`[ScreenShare] Source selected: ${selectedSource.name} (${selectedSource.id})`);
+            global.selectedScreenShareSource = selectedSource;
+            callback({ video: selectedSource, audio: 'loopback' });
           } else {
-            console.error('Selected source not found in available sources');
-            callback({ video: null, audio: false });
+            console.log('[ScreenShare] Selection cancelled by user');
+            callback({ video: null, audio: null });
           }
-        })
-        .catch((error) => {
-          console.error('Error getting desktop sources:', error);
-          callback({ video: null, audio: false });
-        });
-    }
-
-    function findSelectedSource(sources, source) {
-      return sources.find((s) => s.id === source.id);
-    }
-
-    function setupScreenSharing(selectedSource) {
-      global.selectedScreenShareSource = selectedSource;
-      console.log('Screen sharing source selected:', selectedSource.name);
-    }
-
+        } catch (error) {
+          console.error('[ScreenShare] Error during source selection:', error);
+          callback({ video: null, audio: null });
+          }
+      });
+    });
 
     mainWindow.webContents.on('console-message', (event) => {
       const { message } = event;
@@ -302,7 +323,6 @@ if (!gotTheLock) {
     }).catch(r => console.error('Error loading URL:', r));
 
     mainWindow.webContents.on('did-finish-load', () => {
-      injectScreenSharingLogic();
     });
     mainWindow.removeMenu();
     mainWindow.on('focus', () => {
@@ -353,18 +373,6 @@ if (!gotTheLock) {
     setupDownloadHandler();
 
     return mainWindow;
-  }
-
-  function injectScreenSharingLogic() {
-    const fs = require("fs");
-    const scriptPath = path.join(__dirname, "display-capture", "screenShare.js");
-    try {
-      const script = fs.readFileSync(scriptPath, "utf8");
-      mainWindow.webContents.executeJavaScript(script).catch(err => console.error('Error injecting screen sharing script:', err));
-      console.log('Screen sharing injection script loaded successfully');
-    } catch (err) {
-      console.error("Failed to load injected screen sharing script:", err);
-    }
   }
 
   function getOrCreateMainWindow() {
@@ -483,80 +491,16 @@ if (!gotTheLock) {
 
     await session.defaultSession.clearCache();
 
-    ipcMain.handle("desktop-capturer-get-sources", (_event, opts) =>
-      desktopCapturer.getSources(opts)
-    );
+    // Log allowlisted IPC channels count for security audit
+    console.log(`[IPC Security] Initialized with ${allowedChannels.size} allowlisted channels`);
 
-    let picker = null;
-    
-    ipcMain.handle("choose-desktop-media", async (_event, sourceTypes) => {
-      const sources = await desktopCapturer.getSources({ types: sourceTypes });
-      const chosen = await showScreenPicker(sources);
-      return chosen ? chosen.id : null;
-    });
+    // IPC Handlers for screen sharing and preview management
+    setupScreenSharingIpcHandlers();
 
-    ipcMain.on("cancel-desktop-media", () => {
-      if (picker) {
-        picker.close();
-      }
-    });
-
-    ipcMain.handle("trigger-screen-share", () => {
-      console.log('IPC: trigger-screen-share received, showing StreamSelector...');
-      const streamSelector = new StreamSelector(mainWindow);
-      
-      return new Promise((resolve) => {
-        streamSelector.show((source) => {
-          console.log('StreamSelector returned source:', source);
-          if (source) {
-            global.selectedScreenShareSource = source;
-            console.log('Screen sharing source selected:', source.id);
-          }
-          resolve(source);
-        });
-      });
-    });
-
-    ipcMain.on("screen-sharing-started", (event, sourceId) => {
-      console.log('Screen sharing started with source:', sourceId);
-      global.selectedScreenShareSource = sourceId;
-    });
-
-    ipcMain.on("screen-sharing-stopped", () => {
-      global.selectedScreenShareSource = null;
-      console.log('Screen sharing stopped');
-    });
-
-
-    ipcMain.handle("get-screen-sharing-status", () => {
-      return global.selectedScreenShareSource !== null;
-    });
-
-    ipcMain.handle("get-screen-share-stream", () => {
-      if (typeof global.selectedScreenShareSource === "string") {
-        return global.selectedScreenShareSource;
-      } else if (global.selectedScreenShareSource?.id) {
-        return global.selectedScreenShareSource.id;
-      }
-      return null;
-    });
-
-    ipcMain.handle("get-screen-share-screen", () => {
-      if (
-        global.selectedScreenShareSource &&
-        typeof global.selectedScreenShareSource === "object"
-      ) {
-        const { screen } = require("electron");
-        const displays = screen.getAllDisplays();
-
-        if (global.selectedScreenShareSource?.id?.startsWith("screen:")) {
-          const display = displays[0] || { size: { width: 1920, height: 1080 } };
-          return { width: display.size.width, height: display.size.height };
-        }
-      }
-
-      return { width: 1920, height: 1080 };
-    });
+    // Request media access early on macOS to avoid mid-call prompts
+    if (process.platform === 'darwin') {
+      requestMediaAccess();
+    }
 
     loadModules();
     mainWindow = getOrCreateMainWindow();
@@ -576,35 +520,6 @@ if (!gotTheLock) {
 
   });
 
-  function showScreenPicker(sources) {
-    return new Promise((resolve) => {
-        let picker = new BrowserWindow({
-            width: 800,
-            height: 600,
-            webPreferences: {
-                preload: path.join(__dirname, "source-selector", "preload.js"),
-            },
-        });
-
-        picker.loadFile(path.join(__dirname, "source-selector", "index.html"));
-
-      picker.webContents.on("did-finish-load", () => {
-        picker.webContents.send("sources-list", sources);
-      });
-
-      ipcMain.once("source-selected", (event, source) => {
-        resolve(source);
-        if (picker) {
-          picker.close();
-        }
-      });
-
-      picker.on("closed", () => {
-        picker = null;
-        resolve(null);
-      });
-    });
-  }
 
   function enableLightPerformanceMode() {
     mainWindow.webContents.executeJavaScript(`
@@ -614,8 +529,140 @@ if (!gotTheLock) {
     });`).catch(r => console.error('Error executing JS:', r));
   }
 
+  // Screen sharing and preview IPC handlers
+  function setupScreenSharingIpcHandlers() {
+    // Handle trigger screen sharing from renderer process API
+    ipcMain.on("trigger-screen-share", () => {
+      console.log('[ScreenShare] Screen sharing triggered from renderer API');
+      
+      if (!mainWindow || mainWindow.isDestroyed()) {
+        console.error('[ScreenShare] Main window not available');
+        return;
+      }
+
+      // Use StreamSelector for source selection
+      streamSelector.show((selectedSource) => {
+        if (selectedSource) {
+          console.log(`[ScreenShare] Source selected via API: ${selectedSource.name} (${selectedSource.id})`);
+          // Set up screen sharing state
+          global.selectedScreenShareSource = selectedSource;
+
+          // Send the selected source back to renderer for Teams to use
+          mainWindow.webContents.send("screen-sharing-source-selected", {
+            sourceId: selectedSource.id,
+            sourceName: selectedSource.name,
+            isActive: true
+          });
+        } else {
+          console.log('[ScreenShare] Selection cancelled via API');
+          // Notify renderer of cancelled selection - this won't interfere with camera
+          mainWindow.webContents.send("screen-sharing-source-selected", { 
+            isActive: false,
+            cancelled: true 
+          });
+        }
+      });
+    });
+
+    // Handle screen sharing stopped - clear state
+    ipcMain.on("screen-sharing-stopped", () => {
+      console.log('[ScreenShare] Screen sharing stopped');
+      global.selectedScreenShareSource = null;
+
+      if (previewWindow) {
+        previewWindow.close();
+      }
+
+      // Notify renderer process of status change
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("screen-sharing-status-changed", { isActive: false });
+      }
+    });
+
+    // Status and stream handlers for compatibility
+    ipcMain.handle("get-screen-sharing-status", () => {
+      const isActive = global.selectedScreenShareSource !== null;
+      console.log(`[ScreenShare] Status requested: ${isActive}`);
+      return isActive;
+    });
+
+    ipcMain.handle("get-screen-share-stream", async () => {
+      // Return the source ID - handle both string and object formats
+      if (typeof global.selectedScreenShareSource === "string") {
+        return global.selectedScreenShareSource;
+      } else if (global.selectedScreenShareSource?.id) {
+        // Validate that the source still exists (handle display changes)
+        try {
+          const sources = await desktopCapturer.getSources({ types: ['window', 'screen'] });
+          const sourceExists = sources.find(s => s.id === global.selectedScreenShareSource.id);
+          
+          if (!sourceExists) {
+            console.warn('[ScreenShare] Selected source no longer available, clearing state');
+            global.selectedScreenShareSource = null;
+            return null;
+          }
+        } catch (error) {
+          console.error('[ScreenShare] Error validating source:', error);
+          return global.selectedScreenShareSource.id;
+        }
+        
+        return global.selectedScreenShareSource.id;
+      }
+      console.log('[ScreenShare] No active screen share stream');
+      return null;
+    });
+
+    ipcMain.handle("get-screen-share-screen", () => {
+      // Return screen dimensions if available, otherwise default
+      if (
+        global.selectedScreenShareSource &&
+        typeof global.selectedScreenShareSource === "object"
+      ) {
+        const { screen } = require("electron");
+        const displays = screen.getAllDisplays();
+
+        if (global.selectedScreenShareSource?.id?.startsWith("screen:")) {
+          const display = displays[0] || { size: { width: 1920, height: 1080 } };
+          console.log(`[ScreenShare] Screen dimensions: ${display.size.width}x${display.size.height}`);
+          return { width: display.size.width, height: display.size.height };
+        }
+      }
+
+      console.log('[ScreenShare] Using default screen dimensions');
+      return { width: 1920, height: 1080 };
+    });
+
+    // Legacy compatibility handlers for desktop capture
+    ipcMain.handle("desktop-capturer-get-sources", (_event, opts) => {
+      console.log('[ScreenShare] Desktop capturer sources requested');
+      return desktopCapturer.getSources(opts);
+    });
+
+    console.log('[ScreenShare] IPC handlers initialized');
+  }
+
+  // macOS media permissions handler
+  async function requestMediaAccess() {
+    if (process.platform !== 'darwin') {
+      return;
+    }
+
+    const { systemPreferences } = require('electron');
+    
+    ['camera', 'microphone'].forEach(async (permission) => {
+      try {
+        const status = await systemPreferences.askForMediaAccess(permission);
+        console.log(`[macOS Permissions] ${permission} access status: ${status}`);
+      } catch (error) {
+        console.error(`[macOS Permissions] Error requesting ${permission} access:`, error);
+      }
+    });
+  }
+
   app.on('window-all-closed', () => {
     globalShortcut.unregisterAll();
+
+
     if (process.platform !== 'darwin') {
       app.quit();
     }

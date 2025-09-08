@@ -27,6 +27,13 @@ const displayCaptureDir = path.join(tempDir, 'display-capture');
 fs.mkdirSync(displayCaptureDir, { recursive: true });
 fs.cpSync(path.join(__dirname, 'src', 'display-capture'), displayCaptureDir, { recursive: true });
 
+
+
+// Copy security module
+const securityDir = path.join(tempDir, 'security');
+fs.mkdirSync(securityDir, { recursive: true });
+fs.cpSync(path.join(__dirname, 'src', 'security'), securityDir, { recursive: true });
+
 // Copy icons to correct location
 if (fs.existsSync(path.join(appDir, 'icons'))) {
   fs.cpSync(path.join(appDir, 'icons'), path.join(tempDir, 'icons'), { recursive: true });

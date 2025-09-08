@@ -1,5 +1,6 @@
 try {
   const { contextBridge, ipcRenderer } = require('electron');
+  const { allowedChannels } = require('../security/ipcValidator');
 
   contextBridge.exposeInMainWorld('api', {
     send: (channel, data) => {
@@ -12,22 +13,65 @@ try {
     },
   });
 
-  contextBridge.exposeInMainWorld('electronAPI', {
-    sendScreenSharingStarted: (sourceId) =>
-      ipcRenderer.send("screen-sharing-started", sourceId),
-    sendScreenSharingStopped: () => ipcRenderer.send("screen-sharing-stopped"),
-    send: (channel, ...args) => {
-      if (
-        [
-          "active-screen-share-stream",
-          "screen-sharing-stopped",
-          "screen-sharing-started",
-        ].includes(channel)
-      ) {
-        return ipcRenderer.send(channel, ...args);
-      }
-    },
-  });
+
+// IPC Security: Create a safe wrapper for ipcRenderer.send
+const send = (channel, data) => {
+  if (allowedChannels.has(channel)) {
+    ipcRenderer.send(channel, data);
+  } else {
+    console.error(`[IPC Security] Blocked send to unauthorized channel: ${channel}`);
+  }
+};
+
+// IPC Security: Create a safe wrapper for ipcRenderer.invoke
+const invoke = async (channel, data) => {
+  if (allowedChannels.has(channel)) {
+    return await ipcRenderer.invoke(channel, data);
+  } else {
+    console.error(`[IPC Security] Blocked invoke to unauthorized channel: ${channel}`);
+    throw new Error(`Unauthorized IPC channel: ${channel}`);
+  }
+};
+
+// IPC Security: Create a safe wrapper for ipcRenderer.on
+const on = (channel, func) => {
+  if (allowedChannels.has(channel)) {
+    // Deliberately strip event as it includes `sender`
+    const subscription = (event, ...args) => func(...args);
+    ipcRenderer.on(channel, subscription);
+
+    // Return a cleanup function
+    return () => {
+      ipcRenderer.removeListener(channel, subscription);
+    };
+  } else {
+    console.error(`[IPC Security] Blocked listener for unauthorized channel: ${channel}`);
+    return () => {}; // Return a no-op cleanup function
+  }
+};
+
+contextBridge.exposeInMainWorld('electron', {
+  send,
+  invoke,
+  on,
+  zoomChange: (direction) => send('zoom-change', direction),
+
+  // Screen sharing API
+  screenShare: {
+    trigger: () => invoke('trigger-screen-share'),
+    stop: () => send('screen-sharing-stopped'),
+    getStatus: () => invoke('get-screen-sharing-status'),
+    getStreamId: () => invoke('get-screen-share-stream'),
+    getScreen: () => invoke('get-screen-share-screen'),
+    onSourceSelected: (callback) => on('screen-sharing-source-selected', callback),
+    onStatusChanged: (callback) => on('screen-sharing-status-changed', callback),
+  },
+
+  // Notification API
+  notifications: {
+    onNew: (callback) => on('new-notification', callback),
+  },
+});
 
   ipcRenderer.send('preload-executed');
 

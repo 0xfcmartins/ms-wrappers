@@ -1,304 +1,340 @@
-(function () {
-  let isScreenSharing = false;
-  let activeStreams = [];
-  let activeMediaTracks = [];
+/**
+ * StreamSelector Renderer Script
+ * 
+ * Handles UI interactions for screen source selection
+ * Communicates with main process through secure preload API
+ */
 
-  /**
-   * Determines if the given constraints indicate a screen sharing request
-   * @param {Object} constraints - Media constraints object
-   * @returns {boolean} - True if constraints indicate screen sharing
-   */
-  function isScreenShareConstraints(constraints) {
-    return constraints?.video &&
-           (constraints.video.chromeMediaSource === "desktop" ||
-            constraints.video.mandatory?.chromeMediaSource === "desktop" ||
-            constraints.video.chromeMediaSourceId ||
-            constraints.video.mandatory?.chromeMediaSourceId ||
-            (typeof constraints.video === "object" &&
-             constraints.video.deviceId &&
-             typeof constraints.video.deviceId === "object" &&
-             constraints.video.deviceId?.exact));
-  }
-
-  /**
-   * Creates a proxy for getDisplayMedia to monitor screen sharing
-   * @returns {Function} - Proxied getDisplayMedia function
-   */
-  function createGetDisplayMediaProxy() {
-    const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia.bind(
-      navigator.mediaDevices
-    );
-
-    return function (constraints) {
-      return originalGetDisplayMedia(constraints)
-        .then((stream) => {
-          console.debug("Screen sharing stream detected via getDisplayMedia");
-          handleScreenShareStream(stream, "getDisplayMedia");
-          return stream;
-        })
-        .catch((error) => {
-          console.error("getDisplayMedia error:", error);
-          throw error;
-        });
-    };
-  }
-
-  /**
-   * Creates a proxy for getUserMedia to monitor screen sharing
-   * @returns {Function} - Proxied getUserMedia function
-   */
-  function createGetUserMediaProxy() {
-    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(
-      navigator.mediaDevices
-    );
-
-    return function (constraints) {
-      return originalGetUserMedia(constraints)
-        .then((stream) => {
-          if (isScreenShareConstraints(constraints)) {
-            console.debug("Screen sharing stream detected");
-            handleScreenShareStream(stream, "getUserMedia");
-          }
-          return stream;
-        })
-        .catch((error) => {
-          console.error("getUserMedia error:", error);
-          throw error;
-        });
-    };
-  }
-
-  /**
-   * Sets up monitoring of screen sharing by proxying media device methods
-   */
-  function monitorScreenSharing() {
-    navigator.mediaDevices.getDisplayMedia = createGetDisplayMediaProxy();
-    navigator.mediaDevices.getUserMedia = createGetUserMediaProxy();
-  }
-
-  /**
-   * Generates a unique source ID for the stream
-   * @param {MediaStream} stream - The media stream
-   * @returns {string} - Unique source ID
-   */
-  function generateSourceId(stream) {
-    return stream?.id ? stream.id : `screen-share-${crypto.randomUUID()}`;
-  }
-
-  /**
-   * Notifies Electron about screen sharing start
-   * @param {string} sourceId - The source ID
-   */
-  function notifyScreenSharingStarted(sourceId) {
-    const electronAPI = window.electronAPI;
+class ScreenSourceSelector {
+  constructor() {
+    this.selectedSource = null;
+    this.sources = [];
+    this.isSubmitting = false;
+    this.activeTab = 'screens'; // Default to screens tab
     
-    if (electronAPI?.sendScreenSharingStarted) {
-      electronAPI.sendScreenSharingStarted(sourceId);
-      console.debug("Screen sharing stream established locally with ID:", sourceId);
-    }
+    // DOM elements
+    this.loadingEl = document.getElementById('loading');
+    this.sourcesGridEl = document.getElementById('sourcesGrid');
+    this.noSourcesEl = document.getElementById('noSources');
+    this.shareBtn = document.getElementById('shareBtn');
+    this.cancelBtn = document.getElementById('cancelBtn');
+    this.screensTab = document.getElementById('screensTab');
+    this.windowsTab = document.getElementById('windowsTab');
+    
+    this.init();
   }
 
-  /**
-   * Sets up video track monitoring for the stream
-   * @param {MediaStream} stream - The media stream
-   */
-  function setupVideoTrackMonitoring(stream) {
-    const videoTracks = stream.getVideoTracks();
-    activeMediaTracks.push(...videoTracks);
-
-    videoTracks.forEach((track, index) => {
-      track.addEventListener("ended", () => {
-        console.debug(`Video track ${index} ended (popup remains open)`);
+  init() {
+    // Set up event listeners with null guards
+    if (this.shareBtn) {
+      this.shareBtn.addEventListener('click', () => this.handleShare());
+    } else {
+      console.warn('[ScreenSourceSelector] shareBtn element not found');
+    }
+    
+    if (this.cancelBtn) {
+      this.cancelBtn.addEventListener('click', () => this.handleCancel());
+    } else {
+      console.warn('[ScreenSourceSelector] cancelBtn element not found');
+    }
+    
+    // Set up tab event listeners
+    if (this.screensTab) {
+      this.screensTab.addEventListener('click', () => this.switchTab('screens'));
+    } else {
+      console.warn('[ScreenSourceSelector] screensTab element not found');
+    }
+    
+    if (this.windowsTab) {
+      this.windowsTab.addEventListener('click', () => this.switchTab('windows'));
+    } else {
+      console.warn('[ScreenSourceSelector] windowsTab element not found');
+    }
+    
+    // Listen for sources from main process
+    if (window.streamSelector) {
+      window.streamSelector.onSourcesAvailable((sources) => {
+        this.handleSourcesReceived(sources);
       });
-    });
+    } else {
+      console.error('[ScreenSourceSelector] streamSelector API not available');
+      this.showError('Security error: Unable to access screen sources');
+    }
+    
+    // Handle keyboard navigation
+    document.addEventListener('keydown', (e) => this.handleKeyDown(e));
+    
+    console.log('[ScreenSourceSelector] Initialized');
   }
 
-  /**
-   * Handles the initialization of a screen sharing stream
-   * @param {MediaStream} stream - The media stream
-   * @param {string} source - The source of the stream (getDisplayMedia or getUserMedia)
-   */
-  function handleScreenShareStream(stream, source) {
-    console.debug("Screen sharing stream started from:", source);
-
-    const electronAPI = window.electronAPI;
-    if (!electronAPI) {
-      console.error("electronAPI not available");
+  handleSourcesReceived(sources) {
+    console.log(`[ScreenSourceSelector] Received ${sources.length} sources`);
+    this.sources = sources;
+    
+    this.loadingEl.style.display = 'none';
+    
+    if (sources.length === 0) {
+      this.noSourcesEl.style.display = 'block';
       return;
     }
-
-    isScreenSharing = true;
-    activeStreams.push(stream);
-
-    const sourceId = generateSourceId(stream);
-    notifyScreenSharingStarted(sourceId);
     
-    startUIMonitoring();
-    setupVideoTrackMonitoring(stream);
+    this.renderFilteredSources();
+    this.sourcesGridEl.style.display = 'grid';
   }
 
-  /**
-   * Handles the end of screen sharing
-   * @param {string} reason - The reason for ending
-   */
-  function handleStreamEnd(reason) {
-    console.debug("Stream ending detected, reason:", reason);
+  switchTab(tabName) {
+    // Update active tab
+    this.activeTab = tabName;
+    
+    // Update tab button states
+    document.querySelectorAll('.teams-tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
+    
+    // Clear current selection when switching tabs
+    this.selectedSource = null;
+    this.shareBtn.disabled = true;
+    
+    // Re-render sources with new filter
+    this.renderFilteredSources();
+    
+    console.log(`[ScreenSourceSelector] Switched to ${tabName} tab`);
+  }
 
-    if (!isScreenSharing) {
+  renderFilteredSources() {
+    if (!this.sources || this.sources.length === 0) {
       return;
     }
-
-    isScreenSharing = false;
-
-    const electronAPI = window.electronAPI;
-    if (electronAPI?.sendScreenSharingStopped) {
-      electronAPI.sendScreenSharingStopped();
-    }
-
-    activeStreams = [];
-    activeMediaTracks = [];
-  }
-
-  /**
-   * Configuration object containing UI selectors for screen sharing controls
-   */
-  const UI_CONFIG = {
-    stopSharingSelectors: [
-      '[data-tid*="stop-share"]',
-      '[data-tid*="stopShare"]',
-      '[data-tid*="screen-share"][data-tid*="stop"]',
-      'button[title*="Stop sharing"]',
-      'button[aria-label*="Stop sharing"]',
-      '[data-tid="call-screen-share-stop-button"]',
-      '[data-tid="desktop-share-stop-button"]',
-      ".ts-calling-screen-share-stop-button",
-      'button[data-testid*="stop-sharing"]',
-      '[data-tid*="share"] button',
-      ".share-stop-button",
-      '[aria-label*="share"]',
-      '[title*="share"]',
-      '[data-tid*="hangup"]',
-      '[data-tid*="call-end"]',
-      'button[data-tid="call-hangup"]'
-    ],
-    checkInterval: 2000
-  };
-
-  /**
-   * Handles stop sharing button clicks
-   * @param {Event} event - The click event
-   */
-  function handleStopSharing(event) {
-    console.debug("Stop sharing button clicked", event);
     
-    if (isScreenSharing) {
-      terminateActiveStreams();
+    // Filter sources based on active tab
+    const filteredSources = this.sources.filter(source => {
+      const isScreen = source.id.startsWith('screen:');
+      return this.activeTab === 'screens' ? isScreen : !isScreen;
+    });
+    
+    if (filteredSources.length === 0) {
+      this.sourcesGridEl.style.display = 'none';
+      this.noSourcesEl.style.display = 'block';
+      this.noSourcesEl.innerHTML = `
+        <p>No ${this.activeTab === 'screens' ? 'screens' : 'applications'} available for sharing.</p>
+        <p>Try switching to the other tab or check your system permissions.</p>
+      `;
+      return;
     }
+    
+    this.noSourcesEl.style.display = 'none';
+    this.sourcesGridEl.style.display = 'grid';
+    this.renderSources(filteredSources);
   }
 
-  /**
-   * Adds event listeners to stop sharing buttons
-   * @returns {number} - Number of buttons that had listeners added
-   */
-  function addStopSharingListeners() {
-    let foundButtons = 0;
-
-    foundButtons = monitorScreenSharingButtons(
-      UI_CONFIG.stopSharingSelectors,
-      foundButtons,
-      handleStopSharing
-    );
-
-    if (foundButtons > 0) {
-      console.debug("Added stop sharing listeners to", foundButtons, "buttons");
-    }
-
-    return foundButtons;
-  }
-
-  /**
-   * Creates a mutation observer to monitor DOM changes
-   * @returns {MutationObserver} - The configured mutation observer
-   */
-  function createDOMObserver() {
-      return new MutationObserver((mutations) => {
-        let shouldCheckForButtons = false;
-
-        mutations.forEach((mutation) => {
-            if (mutation.type === "childList" && mutation.addedNodes.length > 0) {
-                shouldCheckForButtons = true;
-            }
-        });
-
-        if (shouldCheckForButtons) {
-            addStopSharingListeners();
-        }
+  renderSources(sources) {
+    this.sourcesGridEl.innerHTML = '';
+    
+    sources.forEach((source, index) => {
+      const sourceEl = this.createSourceElement(source, index);
+      this.sourcesGridEl.appendChild(sourceEl);
     });
   }
 
-  /**
-   * Starts monitoring UI for screen sharing controls
-   */
-  function startUIMonitoring() {
-    console.debug("Starting UI monitoring for screen sharing controls");
+  createSourceElement(source, index) {
+    const sourceEl = document.createElement('div');
+    sourceEl.className = 'teams-source source-item';
+    sourceEl.setAttribute('tabindex', '0');
+    sourceEl.setAttribute('role', 'button');
+    sourceEl.setAttribute('aria-label', `Share ${source.name}`);
+    sourceEl.dataset.sourceId = source.id;
+    sourceEl.dataset.index = index;
 
-    const observer = createDOMObserver();
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+    // Create thumbnail image
+    const thumbnailEl = document.createElement('img');
+    thumbnailEl.className = 'teams-source-thumbnail source-thumbnail';
+    // Handle both string data URLs and NativeImage objects
+    thumbnailEl.src = typeof source.thumbnail === 'string' ? source.thumbnail : source.thumbnail.toDataURL();
+    thumbnailEl.alt = `Thumbnail of ${source.name}`;
+    thumbnailEl.loading = 'lazy';
 
-    addStopSharingListeners();
+    // Create source info
+    const infoEl = document.createElement('div');
+    infoEl.className = 'teams-source-info source-info';
 
-    const checkInterval = setInterval(() => {
-      if (isScreenSharing) {
-        addStopSharingListeners();
-      } else {
-        clearInterval(checkInterval);
+    const nameEl = document.createElement('div');
+    nameEl.className = 'teams-source-name source-name';
+    nameEl.textContent = source.name;
+    nameEl.title = source.name; // Tooltip for long names
+
+    const typeEl = document.createElement('div');
+    typeEl.className = 'teams-source-type source-type';
+    typeEl.textContent = source.id.startsWith('screen:') ? 'Screen' : 'Window';
+
+    infoEl.appendChild(nameEl);
+    infoEl.appendChild(typeEl);
+
+    sourceEl.appendChild(thumbnailEl);
+    sourceEl.appendChild(infoEl);
+
+    // Event listeners
+    sourceEl.addEventListener('click', () => this.selectSource(source, sourceEl));
+    sourceEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        this.selectSource(source, sourceEl);
       }
-    }, UI_CONFIG.checkInterval);
-  }
-
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
-      monitorScreenSharing();
-    });
-  } else {
-    monitorScreenSharing();
-  }
-
-  function monitorScreenSharingButtons(
-    stopSharingSelectors,
-    foundButtons,
-    handleStopSharing
-  ) {
-    stopSharingSelectors.forEach((selector) => {
-      const elements = document.querySelectorAll(selector);
-
-      elements.forEach((element) => {
-        if (!element.hasAttribute("data-screen-share-monitored")) {
-          foundButtons++;
-          element.setAttribute("data-screen-share-monitored", "true");
-          element.addEventListener("click", handleStopSharing);
-        }
-      });
-    });
-    return foundButtons;
-  }
-
-  function terminateActiveStreams() {
-    activeMediaTracks.forEach((track) => {
-      track.stop();
     });
 
-    activeStreams.forEach((stream) => {
-      stream.getTracks().forEach((track) => {
-        track.stop();
-      });
-    });
-
-    setTimeout(() => {
-      handleStreamEnd("ui-button-click");
-    }, 500);
+    return sourceEl;
   }
-})();
+
+  selectSource(source, sourceEl) {
+    // Remove previous selection
+    const previousSelected = this.sourcesGridEl.querySelector('.teams-source.selected, .source-item.selected');
+    if (previousSelected) {
+      previousSelected.classList.remove('selected');
+      previousSelected.setAttribute('aria-selected', 'false');
+    }
+
+    // Mark new selection
+    sourceEl.classList.add('selected');
+    sourceEl.setAttribute('aria-selected', 'true');
+    
+    this.selectedSource = source;
+    this.shareBtn.disabled = false;
+    
+    console.log(`[ScreenSourceSelector] Selected source: ${source.name} (${source.id})`);
+  }
+
+  handleShare() {
+    if (this.isSubmitting) {
+      return; // Prevent duplicate submissions
+    }
+
+    if (!this.selectedSource) {
+      console.error('[ScreenSourceSelector] No source selected');
+      return;
+    }
+
+    this.isSubmitting = true;
+    this.shareBtn.disabled = true;
+
+    console.log(`[ScreenSourceSelector] Sharing source: ${this.selectedSource.name}`);
+    
+    try {
+      if (window.streamSelector) {
+        // Create a serializable version of the source object
+        // Only include the essential properties and exclude non-serializable thumbnail
+        const serializableSource = {
+          id: this.selectedSource.id,
+          name: this.selectedSource.name,
+          display_id: this.selectedSource.display_id,
+          appIcon: this.selectedSource.appIcon
+        };
+        
+        window.streamSelector.selectSource(serializableSource);
+      } else {
+        console.error('[ScreenSourceSelector] streamSelector API not available');
+        // Re-enable on failure path inside the picker
+        this.isSubmitting = false;
+        this.shareBtn.disabled = false;
+      }
+    } catch (e) {
+      console.error('[ScreenSourceSelector] Unhandled error while sharing:', e);
+      this.isSubmitting = false;
+      this.shareBtn.disabled = false;
+    }
+  }
+
+  handleCancel() {
+    console.log('[ScreenSourceSelector] Selection cancelled');
+
+    // Disable actions to prevent duplicate events
+    this.isSubmitting = false;
+    if (this.shareBtn) this.shareBtn.disabled = true;
+
+    try {
+      if (window.streamSelector && typeof window.streamSelector.cancelSelection === 'function') {
+        window.streamSelector.cancelSelection();
+      } else {
+        console.warn('[ScreenSourceSelector] cancelSelection API not available, closing window locally');
+      }
+    } catch (e) {
+      console.error('[ScreenSourceSelector] Error during cancelSelection:', e);
+    } finally {
+      // Ensure we cleanup listeners and close the picker gracefully even if IPC path is unavailable
+      try { this.cleanup(); } catch {}
+      // Close the window; main process will treat this as a cancel if needed
+      try { window.close(); } catch {}
+    }
+  }
+
+  handleKeyDown(e) {
+    // Handle Escape key to cancel
+    if (e.key === 'Escape') {
+      this.handleCancel();
+      return;
+    }
+
+    // Handle Enter key on share button
+    if (e.key === 'Enter' && document.activeElement === this.shareBtn) {
+      this.handleShare();
+    }
+  }
+
+  showError(message) {
+    this.loadingEl.style.display = 'none';
+    this.sourcesGridEl.style.display = 'none';
+    this.noSourcesEl.style.display = 'block';
+    this.noSourcesEl.innerHTML = `
+      <p>Error: ${message}</p>
+      <p>Please try again or contact support.</p>
+    `;
+  }
+
+  cleanup() {
+    if (window.streamSelector) {
+      window.streamSelector.removeAllListeners();
+    }
+  }
+}
+
+// Initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  // Attempt to embed the picker into a specific host element if present.
+  // This supports embedding into the Teams app container:
+  // XPath: //*[@id="app"]/div/div/div/div[9]/div/div[1]
+  try {
+    const resolveXPath = (xpath, contextNode = document) => {
+      const result = document.evaluate(xpath, contextNode, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+      return result.singleNodeValue || null;
+    };
+
+    const hostXPath = '//*[@id="app"]/div/div/div/div[9]/div/div[1]';
+    const host = resolveXPath(hostXPath);
+    const container = document.getElementById('obf-MainContainer');
+
+    if (host && container && container.parentElement !== host) {
+      host.appendChild(container);
+      // Ensure the container fits the host area instead of viewport
+      container.style.setProperty('height', '100%', 'important');
+      container.style.setProperty('width', '100%', 'important');
+      // Avoid overlay background when embedded
+      document.body && (document.body.style.background = 'transparent');
+      console.log('[ScreenSourceSelector] Embedded into host element via XPath.');
+    }
+  } catch (e) {
+    console.warn('[ScreenSourceSelector] Embedding attempt failed:', e);
+  }
+
+  const selector = new ScreenSourceSelector();
+  
+  // Cleanup when window is unloaded
+  window.addEventListener('beforeunload', () => {
+    selector.cleanup();
+  });
+});
+
+// Handle any unhandled errors
+window.addEventListener('error', (e) => {
+  console.error('[ScreenSourceSelector] Unhandled error:', e.error);
+});
+
+console.log('[ScreenSourceSelector] Script loaded');
