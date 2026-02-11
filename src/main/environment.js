@@ -30,7 +30,9 @@ function applyEnvironment(app, appConfig) {
         if (process.env.SNAP_USER_DATA) {
             const tmpDir = path.join(process.env.SNAP_USER_DATA, 'tmp');
             try {
-                require('fs').mkdirSync(tmpDir, { recursive: true });
+                // Use restricted permissions (0700) for the temporary directory
+                // to ensure only the current user can access it (Sonar S5443)
+                require('fs').mkdirSync(tmpDir, { recursive: true, mode: 0o700 });
                 process.env.TMPDIR = tmpDir;
             } catch (error) {
                 console.warn('[Snap] Could not create temp directory:', error.message);
@@ -71,6 +73,12 @@ function applyEnvironment(app, appConfig) {
     }
 
     if (process.platform === 'linux') {
+        // Wayland support
+        if (process.env.XDG_SESSION_TYPE === 'wayland') {
+            app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WebRTCPipeWireCapturer');
+            app.commandLine.appendSwitch('ozone-platform', 'wayland');
+        }
+
         // Add Linux-specific flags for better compatibility
         if (!isSnap) {
             // Only add these for non-Snap environments since Snap handles sandboxing differently
@@ -104,11 +112,11 @@ function applyEnvironment(app, appConfig) {
     // Environment-aware media flags - Wayland-specific optimization for Linux desktop environments
     // PipeWire provides better screen sharing and audio capture on Wayland
     if (process.platform === 'linux') {
-        // Detect display server type - but force X11 for Snap
-        const displayServer = isSnap ? 'x11' : (process.env.XDG_SESSION_TYPE || 'x11');
+        // Detect display server type
+        const displayServer = process.env.XDG_SESSION_TYPE || 'x11';
         console.info(`Running on ${displayServer} display server`);
 
-        if (displayServer === 'wayland' && !isSnap) {
+        if (displayServer === 'wayland') {
             console.info('Running under Wayland, enabling PipeWire support...');
 
             const features = app.commandLine.hasSwitch('enable-features')

@@ -5,6 +5,24 @@ const { execSync } = require('child_process');
 const appName = process.argv[2] || 'teams';
 const appDir = path.join(__dirname, 'apps', appName);
 
+// Safe recursive copy to avoid shelling out (prevents command injection)
+function copyRecursiveSync(src, dest) {
+  if (!fs.existsSync(src)) return;
+  const stat = fs.statSync(src);
+  if (stat.isDirectory()) {
+    if (!fs.existsSync(dest)) fs.mkdirSync(dest, { recursive: true });
+    for (const entry of fs.readdirSync(src)) {
+      const srcPath = path.join(src, entry);
+      const destPath = path.join(dest, entry);
+      copyRecursiveSync(srcPath, destPath);
+    }
+  } else {
+    const destDir = path.dirname(dest);
+    if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
+    fs.copyFileSync(src, dest);
+  }
+}
+
 if (!fs.existsSync(appDir)) {
   console.error(`App "${appName}" not found in apps directory!`);
   process.exit(1);
@@ -17,12 +35,12 @@ if (!fs.existsSync(buildDir)) {
 
 // Copy source files to build directory
 console.log('Copying source files...');
-execSync(`cp -r ${path.join(__dirname, 'src')}/* ${buildDir}`, { stdio: 'inherit' });
-execSync(`cp -r ${path.join(appDir, 'icons')} ${buildDir}`, { stdio: 'inherit' });
+copyRecursiveSync(path.join(__dirname, 'src'), buildDir);
+copyRecursiveSync(path.join(appDir, 'icons'), path.join(buildDir, 'icons'));
 
 // Copy snap directory if it exists
 if (fs.existsSync(path.join(appDir, 'snap'))) {
-  execSync(`cp -r ${path.join(appDir, 'snap')} ${buildDir}`, { stdio: 'inherit' });
+  copyRecursiveSync(path.join(appDir, 'snap'), path.join(buildDir, 'snap'));
 }
 
 // Copy desktop file to expected snap location
@@ -102,3 +120,4 @@ try {
 }
 
 console.log(`Build complete! Check ${buildDir} for the snap file`);
+console.log(`To install it locally, run: sudo snap install ${path.join(buildDir, '*.snap')} --dangerous`);

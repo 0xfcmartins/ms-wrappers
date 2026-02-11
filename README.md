@@ -58,6 +58,12 @@ The build process will create:
 - AppImage
 - Snap package
 
+### Installing the Snap Package
+To install the generated snap package locally, you must use the `--dangerous` flag because the package is not signed by the Snap Store:
+``` bash
+    sudo snap install ./build/teams/teams-ew_1.0.5_amd64.snap --dangerous
+```
+
 ### Running Built Applications
 Run the applications directly using Electron:
 ``` bash

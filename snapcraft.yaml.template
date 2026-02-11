@@ -29,6 +29,7 @@ apps:
         - alsa
         - desktop
         - desktop-legacy
+        - gsettings
         - wayland
         - x11
         - unity7
@@ -42,6 +43,9 @@ apps:
         - network-manager-observe
         - screen-inhibit-control
         - dbus
+        - mount-observe
+        - network-status
+        - login-session-observe
 
 parts:
   application:
