@@ -36,7 +36,31 @@
       }
     },
     "snap": {
-      "plugs": [ "camera", "audio-playback", "audio-record"]
+      "plugs": [
+        "network",
+        "network-bind",
+        "camera",
+        "audio-playback",
+        "audio-record",
+        "pulseaudio",
+        "alsa",
+        "desktop",
+        "desktop-legacy",
+        "wayland",
+        "x11",
+        "unity7",
+        "home",
+        "removable-media",
+        "opengl",
+        "browser-support",
+        "process-control",
+        "system-observe",
+        "hardware-observe",
+        "network-manager-observe",
+        "screen-inhibit-control",
+        "dbus",
+        "upower-observe"
+      ]
     }
   }
 }

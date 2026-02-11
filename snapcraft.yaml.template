@@ -10,47 +10,38 @@ confinement: strict
 base: core22
 
 apps:
-  {{APP_NAME}}:
-    command: bin/desktop-launch electron $SNAP/main.js
-    desktop: usr/share/applications/{{APP_NAME}}.desktop
-    extensions: [gnome]
-    environment:
-      ELECTRON_ENABLE_LOGGING: "true"
-      ELECTRON_DISABLE_SECURITY_WARNINGS: "true"
-      ICU_DATA_DIR: "$SNAP/usr/share/icu"
-      # Ensure proper display and D-Bus access
-      TMPDIR: "$SNAP_USER_DATA"
-    plugs:
-      - network
-      - network-bind
-      - camera
-      - audio-playback
-      - audio-record
-      - pulseaudio
-      - alsa
-      - desktop
-      - desktop-legacy
-      - wayland
-      - x11
-      - unity7
-      - home
-      - removable-media
-      - opengl
-      - browser-support
-      - process-control
-      - system-observe
-      - hardware-observe
-      - network-manager-observe
-      - screen-inhibit-control
-      # Critical for fixing your errors:
-      - dbus
-      - system-files
-
-interfaces:
-  system-files:
-    read:
-      - /var/run/dbus/system_bus_socket
-      - /run/dbus/system_bus_socket
+    {{APP_NAME}}:
+      command: desktop-launch $SNAP/bin/electron $SNAP/main.js
+      desktop: usr/share/applications/{{APP_NAME}}.desktop
+      extensions: [gnome]
+      environment:
+        ELECTRON_ENABLE_LOGGING: "true"
+        ELECTRON_DISABLE_SECURITY_WARNINGS: "true"
+        ICU_DATA_DIR: "$SNAP/usr/share/icu"
+        TMPDIR: "$XDG_RUNTIME_DIR"
+      plugs:
+        - network
+        - network-bind
+        - camera
+        - audio-playback
+        - audio-record
+        - pulseaudio
+        - alsa
+        - desktop
+        - desktop-legacy
+        - wayland
+        - x11
+        - unity7
+        - home
+        - removable-media
+        - opengl
+        - browser-support
+        - process-control
+        - system-observe
+        - hardware-observe
+        - network-manager-observe
+        - screen-inhibit-control
+        - dbus
 
 parts:
   application:
@@ -77,116 +68,106 @@ parts:
       - libatk-bridge2.0-0
       - libdrm2
       - libatspi2.0-0
-      - libgtk-3-0
       - libgdk-pixbuf2.0-0
     override-build: |
       snapcraftctl build
-      # Create the app directory structure expected by the command
       mkdir -p $SNAPCRAFT_PART_INSTALL/app
 
   electron:
-  plugin: dump
-  source: https://github.com/electron/electron/releases/download/v35.1.2/electron-v35.1.2-linux-x64.zip
-  source-type: zip
-  override-build: |
-    mkdir -p $SNAPCRAFT_PART_INSTALL/bin
-    cp electron $SNAPCRAFT_PART_INSTALL/bin/
-    chmod +x $SNAPCRAFT_PART_INSTALL/bin/electron
+    plugin: dump
+    source: https://github.com/electron/electron/releases/download/v35.1.2/electron-v35.1.2-linux-x64.zip
+    source-type: zip
+    override-build: |
+      mkdir -p $SNAPCRAFT_PART_INSTALL/bin
+      cp electron $SNAPCRAFT_PART_INSTALL/bin/
+      chmod +x $SNAPCRAFT_PART_INSTALL/bin/electron
 
-    mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib $SNAPCRAFT_PART_INSTALL/usr/share/icu
+      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib $SNAPCRAFT_PART_INSTALL/usr/share/icu
 
-    for file in libffmpeg.so icudtl.dat snapshot_blob.bin v8_context_snapshot.bin; do
-      if [ -f "$file" ]; then
-        case "$file" in
-          *.so)
-            cp "$file" $SNAPCRAFT_PART_INSTALL/usr/lib/
-            ;;
-          icudtl.dat)
-            cp "$file" $SNAPCRAFT_PART_INSTALL/usr/share/icu/
-            ;;
-          *.bin)
-            cp "$file" $SNAPCRAFT_PART_INSTALL/bin/
-            ;;
-        esac
-      else
-        echo "Warning: $file is missing in your Electron zip!"
-      fi
-    done
+      for file in libffmpeg.so icudtl.dat snapshot_blob.bin v8_context_snapshot.bin; do
+        if [ -f "$file" ]; then
+          case "$file" in
+            *.so) cp "$file" $SNAPCRAFT_PART_INSTALL/usr/lib/ ;;
+            icudtl.dat) cp "$file" $SNAPCRAFT_PART_INSTALL/usr/share/icu/ ;;
+            *.bin) cp "$file" $SNAPCRAFT_PART_INSTALL/bin/ ;;
+          esac
+        else
+          echo "Warning: $file is missing in your Electron zip!"
+        fi
+      done
 
-    cat > $SNAPCRAFT_PART_INSTALL/bin/desktop-launch << 'EOF'
-      #!/bin/bash
-      
-      # Snap-specific environment setup
+      cat > $SNAPCRAFT_PART_INSTALL/bin/desktop-launch << 'EOF'
+    #!/bin/bash
       export LD_LIBRARY_PATH="$SNAP/usr/lib:$LD_LIBRARY_PATH"
       export ICU_DATA_DIR="$SNAP/usr/share/icu"
       
-      # Ensure proper tmp directory
-      export TMPDIR="$SNAP_USER_DATA/tmp"
+      # Ensure runtime tmp + user data dir
+      export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-$SNAP_USER_COMMON}"
+      export TMPDIR="$XDG_RUNTIME_DIR"
       mkdir -p "$TMPDIR"
       
-      # Electron flags for Snap environment
-      export ELECTRON_FLAGS="--icu-data-dir=$SNAP/usr/share/icu 
-                             --v8-snapshot-blob-path=$SNAP/bin/snapshot_blob.bin 
-                             --v8-context-snapshot-path=$SNAP/bin/v8_context_snapshot.bin
-                             --no-sandbox
-                             --disable-dev-shm-usage
-                             --disable-setuid-sandbox"
+      # Electron profile dir
+      export CHROME_USER_DATA_DIR="$SNAP_USER_DATA/chrome"
+      mkdir -p "$CHROME_USER_DATA_DIR"
       
-      # Set up D-Bus if not available
-      if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
-        if command -v dbus-launch >/dev/null 2>&1; then
-          eval $(dbus-launch --sh-syntax)
-          export DBUS_SESSION_BUS_ADDRESS
-        fi
+      # D-Bus session
+      if [ -z "$DBUS_SESSION_BUS_ADDRESS" ] && command -v dbus-launch >/dev/null 2>&1; then
+      eval $(dbus-launch --sh-syntax)
+      export DBUS_SESSION_BUS_ADDRESS
       fi
       
-      # Ensure display is set
-      if [ -z "$DISPLAY" ] && [ "$XDG_SESSION_TYPE" != "wayland" ]; then
-        export DISPLAY=:0
+      # Wayland/X11 handling
+      if [ -n "$WAYLAND_DISPLAY" ]; then
+      export ELECTRON_OZONE_PLATFORM_HINT=wayland
+      else
+      export DISPLAY=${DISPLAY:-:0}
       fi
+      
+      # Extra flags for sandboxing
+      export ELECTRON_FLAGS="--no-sandbox \
+      --disable-dev-shm-usage \
+      --disable-setuid-sandbox \
+      --user-data-dir=$CHROME_USER_DATA_DIR"
       
       exec "$@" $ELECTRON_FLAGS
       EOF
-
+      
       chmod +x $SNAPCRAFT_PART_INSTALL/bin/desktop-launch
 
-  prime:
-    - bin/electron
-    - bin/desktop-launch
-    - bin/snapshot_blob.bin
-    - bin/v8_context_snapshot.bin
-    - usr/lib/libffmpeg.so
-    - usr/share/icu/icudtl.dat
-
-  icu-data:
-    plugin: nil
-    after: [electron]
-    override-build: |
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/share/icu
-      
-      if [ -f "/usr/share/chromium/icudtl.dat" ]; then
-        cp /usr/share/chromium/icudtl.dat $SNAPCRAFT_PART_INSTALL/usr/share/icu/
-      elif [ -f "/usr/lib/chromium-browser/icudtl.dat" ]; then
-        cp /usr/lib/chromium-browser/icudtl.dat $SNAPCRAFT_PART_INSTALL/usr/share/icu/
-      fi
-    build-packages:
-      - chromium-browser
     prime:
+      - bin/electron
+      - bin/desktop-launch
+      - bin/snapshot_blob.bin
+      - bin/v8_context_snapshot.bin
+      - usr/lib/libffmpeg.so
       - usr/share/icu/icudtl.dat
 
-  chromium-ffmpeg:
-    plugin: nil
-    after: [electron, icu-data]
-    override-build: |
-      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib
-      
-      apt-get update
-      apt-get install -y chromium-browser
-      
-      if [ -f "/usr/lib/chromium-browser/libffmpeg.so" ]; then
-        cp /usr/lib/chromium-browser/libffmpeg.so $SNAPCRAFT_PART_INSTALL/usr/lib/
-      fi
-    build-packages:
-      - chromium-browser
-    prime:
-      - usr/lib/libffmpeg.so
+    icu-data:
+      plugin: nil
+      after: [electron]
+      override-build: |
+        mkdir -p $SNAPCRAFT_PART_INSTALL/usr/share/icu
+        if [ -f "/usr/lib/chromium/icudtl.dat" ]; then
+            cp /usr/lib/chromium/icudtl.dat $SNAPCRAFT_PART_INSTALL/usr/share/icu/
+        fi
+      build-packages:
+        - chromium-common
+      prime:
+        - usr/share/icu/icudtl.dat
+
+    chromium-ffmpeg:
+      plugin: nil
+      after: [electron, icu-data]
+      override-build: |
+        mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib
+        apt-get update
+        apt-get install -y chromium-codecs-ffmpeg-extra
+        if [ -f "/usr/lib/chromium-browser/libffmpeg.so" ]; then
+            cp /usr/lib/chromium-browser/libffmpeg.so $SNAPCRAFT_PART_INSTALL/usr/lib/
+        elif [ -f "/usr/lib/chromium/libffmpeg.so" ]; then
+            cp /usr/lib/chromium/libffmpeg.so $SNAPCRAFT_PART_INSTALL/usr/lib/
+        fi
+      build-packages:
+        - chromium-codecs-ffmpeg-extra
+      prime:
+        - usr/lib/libffmpeg.so
