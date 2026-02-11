@@ -327,6 +327,7 @@ if (!gotTheLock) {
                 minWidth: appConfig.windowOptions.minWidth,
                 minHeight: appConfig.windowOptions.minHeight,
                 icon: icon,
+                title: appConfig.name,
                 webPreferences: {
                     plugins: true, // Enable plugin support for Widevine DRM
                     nodeIntegration: false,
@@ -466,6 +467,14 @@ if (!gotTheLock) {
                 }
             );
 
+            mainWindow.on('resize', () => {
+                mainWindowState.saveState(mainWindow);
+            });
+
+            mainWindow.on('move', () => {
+                mainWindowState.saveState(mainWindow);
+            });
+
             mainWindowState.manage(mainWindow);
 
             if (!appConfig.notifications) {
@@ -495,7 +504,8 @@ if (!gotTheLock) {
             if (!isSnap) {
                 enableLightPerformanceMode();
             }
-            setupDownloadHandler();
+            // Setup download management for this window's session
+            setupDownloadHandler(mainWindow);
 
             return mainWindow;
 
@@ -527,8 +537,9 @@ if (!gotTheLock) {
         return mainWindow;
     }
 
-    function setupDownloadHandler() {
-        session.defaultSession.on('will-download', async (event, item) => {
+    function setupDownloadHandler(window) {
+        const targetSession = window ? window.webContents.session : session.defaultSession;
+        targetSession.on('will-download', async (event, item) => {
             const fileName = item.getFilename();
             const totalBytes = item.getTotalBytes();
 
@@ -667,7 +678,7 @@ if (!gotTheLock) {
                 iconPath: trayIcon
             });
 
-            setupNotifications(mainWindow, trayIcon);
+            setupNotifications(mainWindow, icon);
 
             setInterval(() => {
                 if (global.gc) {

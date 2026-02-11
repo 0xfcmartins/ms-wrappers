@@ -1,16 +1,17 @@
-const {Notification} = require('electron');
-const {ipcMain} = require('electron');
+const {Notification, ipcMain, nativeImage} = require('electron');
+const path = require('path');
 
-function setupNotifications(mainWindow, trayIcon) {
+function setupNotifications(mainWindow, iconPath) {
 
   function showAppNotification(title, body) {
     try {
+      const notificationIcon = iconPath ? nativeImage.createFromPath(iconPath) : null;
 
       const notification = new Notification({
         title: title,
         body: body,
         silent: false,
-        icon: trayIcon,
+        icon: notificationIcon,
         hasReply: false
       });
 
