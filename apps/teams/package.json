@@ -1,6 +1,6 @@
 {
   "name": "teams-ew",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Unofficial Electron wrapper for Microsoft Teams, built for Linux desktop.",
   "main": "main.js",
   "homepage": "https://github.com/0xfcmartins/teams-ew",
@@ -13,7 +13,7 @@
     "electron-window-state": "^5.0.3"
   },
   "devDependencies": {
-    "electron": "^35.1.3",
+    "electron": "^37.4.0",
     "electron-builder": "^26.0.12",
     "eslint": "^9.23.0"
   },
@@ -36,7 +36,31 @@
       }
     },
     "snap": {
-      "plugs": [ "camera", "audio-playback", "audio-record"]
+      "plugs": [
+        "network",
+        "network-bind",
+        "camera",
+        "audio-playback",
+        "audio-record",
+        "pulseaudio",
+        "alsa",
+        "desktop",
+        "desktop-legacy",
+        "wayland",
+        "x11",
+        "unity7",
+        "home",
+        "removable-media",
+        "opengl",
+        "browser-support",
+        "process-control",
+        "system-observe",
+        "hardware-observe",
+        "network-manager-observe",
+        "screen-inhibit-control",
+        "dbus",
+        "upower-observe"
+      ]
     }
   }
 }

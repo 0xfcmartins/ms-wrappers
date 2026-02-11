@@ -6,10 +6,13 @@
   "scripts": {
     "run:teams": "npx electron /apps/teams",
     "run:outlook": "npx electron /apps/outlook",
+    "run:spotify": "npx electron /apps/spotify",
     "build:teams": "node build.js teams",
     "build:outlook": "node build.js outlook",
+    "build:spotify": "node build.js spotify",
     "dev:teams": "node dev-run.js teams",
-    "dev:outlook": "node dev-run.js outlook"
+    "dev:outlook": "node dev-run.js outlook",
+    "dev:spotify": "node dev-run.js spotify"
   },
   "homepage": "https://github.com/0xfcmartins/teams-ew",
   "author": {
