@@ -1,6 +1,6 @@
 try {
   const { contextBridge, ipcRenderer } = require('electron');
-  const { allowedChannels } = require('../security/ipcValidator');
+  const { allowedChannels } = require('../security/ipcValidator.js');
 
   contextBridge.exposeInMainWorld('api', {
     send: (channel, data) => {

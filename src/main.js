@@ -328,6 +328,7 @@ if (!gotTheLock) {
                 minHeight: appConfig.windowOptions.minHeight,
                 icon: icon,
                 title: appConfig.name,
+                show: false,
                 webPreferences: {
                     plugins: true, // Enable plugin support for Widevine DRM
                     nodeIntegration: false,
@@ -368,15 +369,13 @@ if (!gotTheLock) {
                 callback(allowed);
             });
 
-            if (app.name === 'teams-ew') {
+            if (appConfig.snapName === 'teams-ew') {
                 // Set up screen sharing via extracted module
                 screenShare.init(mainWindow);
             }
 
-            mainWindow.webContents.on('console-message', (event) => {
-                const {message} = event;
-
-                if (message.includes('Uncaught (in promise) AbortError: Registration failed - push service not available')) {
+            mainWindow.webContents.on('console-message', (event, level, message) => {
+                if (message && message.includes('Uncaught (in promise) AbortError: Registration failed - push service not available')) {
                     ipcMain.emit('new-notification', null, {
                         title: 'System notifications are inactive',
                         body: 'Please switch application notification mode to "Alert" for proper notifications.'
@@ -385,10 +384,22 @@ if (!gotTheLock) {
             });
 
             mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+                const responseHeaders = { ...details.responseHeaders };
+                // Remove existing CSP and X-Frame-Options to avoid conflicts
+                Object.keys(responseHeaders).forEach(key => {
+                    if (key.toLowerCase() === 'content-security-policy' || key.toLowerCase() === 'x-frame-options') {
+                        delete responseHeaders[key];
+                    }
+                });
+
                 callback({
                     responseHeaders: {
-                        ...details.responseHeaders,
-                        'Content-Security-Policy': ['']
+                        ...responseHeaders,
+                        'Content-Security-Policy': [
+                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net data: blob:; " +
+                            "frame-ancestors 'self' https://*.microsoft.com https://*.office.com; " +
+                            "base-uri 'self';"
+                        ]
                     }
                 });
             });
@@ -400,6 +411,13 @@ if (!gotTheLock) {
 
             mainWindow.webContents.on('did-finish-load', () => {
                 console.log('[Window] Main window loaded successfully');
+                if (mainWindow) {
+                    mainWindow.show();
+                }
+            });
+
+            mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+                console.error(`[Window] Main window failed to load: ${errorDescription} (${errorCode}) at ${validatedURL}`);
             });
 
             mainWindow.removeMenu();
@@ -517,6 +535,7 @@ if (!gotTheLock) {
                 width: 1200,
                 height: 800,
                 icon: icon,
+                show: false,
                 webPreferences: {
                     nodeIntegration: false,
                     contextIsolation: true,
@@ -526,6 +545,7 @@ if (!gotTheLock) {
 
             fallbackWindow.loadURL(appConfig.url);
             console.log('[Window] Created fallback window');
+            fallbackWindow.show();
             return fallbackWindow;
         }
     }
@@ -643,15 +663,22 @@ if (!gotTheLock) {
 
             // Enhanced security headers
             session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+                const responseHeaders = { ...details.responseHeaders };
+                // Remove existing CSP and X-Frame-Options to avoid conflicts
+                Object.keys(responseHeaders).forEach(key => {
+                    if (key.toLowerCase() === 'content-security-policy' || key.toLowerCase() === 'x-frame-options') {
+                        delete responseHeaders[key];
+                    }
+                });
+
                 callback({
                     responseHeaders: {
-                        ...details.responseHeaders,
+                        ...responseHeaders,
                         'Content-Security-Policy': [
-                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com data: blob:; " +
-                            "frame-ancestors 'none'; " +
+                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net data: blob:; " +
+                            "frame-ancestors 'self' https://*.microsoft.com https://*.office.com; " +
                             "base-uri 'self';"
                         ],
-                        'X-Frame-Options': ['DENY'],
                         'X-Content-Type-Options': ['nosniff']
                     }
                 });
