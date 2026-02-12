@@ -213,6 +213,9 @@ const trayIcon = path.join(__dirname, 'icons', appConfig.trayIconFile);
 // This is a common problem in containers or with some Snap configurations.
 if (process.platform === 'linux') {
     app.commandLine.appendSwitch('no-zygote');
+    // Add flags to address potential graphics conflicts
+    app.commandLine.appendSwitch('disable-gpu-sandbox');
+    app.commandLine.appendSwitch('disable-software-rasterizer');
 }
 
 app.name = appConfig.name;
@@ -258,6 +261,20 @@ if (!gotTheLock) {
         global.resetZoom = resetZoom;
 
         window.webContents.on('before-input-event', (event, input) => {
+            // DevTools shortcut
+            if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
+                if (input.type === 'keyDown') {
+                    window.webContents.openDevTools({ mode: 'detach' });
+                    event.preventDefault();
+                }
+            }
+            if (input.key === 'F12') {
+                if (input.type === 'keyDown') {
+                    window.webContents.openDevTools({ mode: 'detach' });
+                    event.preventDefault();
+                }
+            }
+
             if (input.control || input.meta) {
                 switch (input.key) {
                     case '=':
@@ -329,6 +346,7 @@ if (!gotTheLock) {
                 icon: icon,
                 title: appConfig.name,
                 show: false,
+                backgroundColor: '#ffffff', // Set background color to verify window presence
                 webPreferences: {
                     plugins: true, // Enable plugin support for Widevine DRM
                     nodeIntegration: false,
@@ -345,10 +363,16 @@ if (!gotTheLock) {
                 },
             });
 
-            mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+            const targetSession = mainWindow.webContents.session;
+
+            targetSession.webRequest.onBeforeSendHeaders(
                 (details, callback) => {
-                    details.requestHeaders['Origin'] = appConfig.url;
-                    details.requestHeaders['Referer'] = appConfig.url;
+                    const url = details.url;
+                    // Only override Origin and Referer for Microsoft-related requests to avoid ERR_BLOCKED_BY_RESPONSE
+                    if (url.includes('microsoft.com') || url.includes('office.com') || url.includes('office365.com') || url.includes('live.com') || url.includes('msftauth.net') || url.includes('msauth.net')) {
+                        details.requestHeaders['Origin'] = appConfig.url;
+                        details.requestHeaders['Referer'] = appConfig.url;
+                    }
                     callback({requestHeaders: details.requestHeaders});
                 }
             );
@@ -385,9 +409,13 @@ if (!gotTheLock) {
 
             mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
                 const responseHeaders = { ...details.responseHeaders };
-                // Remove existing CSP and X-Frame-Options to avoid conflicts
+                // Remove existing CSP, X-Frame-Options, and COOP/CORP to avoid conflicts
                 Object.keys(responseHeaders).forEach(key => {
-                    if (key.toLowerCase() === 'content-security-policy' || key.toLowerCase() === 'x-frame-options') {
+                    const lowerKey = key.toLowerCase();
+                    if (lowerKey === 'content-security-policy' || 
+                        lowerKey === 'x-frame-options' || 
+                        lowerKey === 'cross-origin-opener-policy' ||
+                        lowerKey === 'cross-origin-resource-policy') {
                         delete responseHeaders[key];
                     }
                 });
@@ -396,7 +424,7 @@ if (!gotTheLock) {
                     responseHeaders: {
                         ...responseHeaders,
                         'Content-Security-Policy': [
-                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net data: blob:; " +
+                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
                             "frame-ancestors 'self' https://*.microsoft.com https://*.office.com; " +
                             "base-uri 'self';"
                         ]
@@ -409,11 +437,22 @@ if (!gotTheLock) {
                 httpReferrer: appConfig.url
             }).catch(r => console.error('Error loading URL:', r));
 
-            mainWindow.webContents.on('did-finish-load', () => {
-                console.log('[Window] Main window loaded successfully');
+            mainWindow.webContents.once('ready-to-show', () => {
+                const bounds = mainWindow.getBounds();
+                console.log(`[Window] Main window ready to show at ${bounds.x},${bounds.y} (${bounds.width}x${bounds.height})`);
                 if (mainWindow) {
                     mainWindow.show();
+                    mainWindow.focus();
                 }
+            });
+
+            mainWindow.webContents.on('did-finish-load', () => {
+                console.log('[Window] Main window finished loading');
+                if (mainWindow && !mainWindow.isVisible()) {
+                    mainWindow.show();
+                }
+                // Log window visibility state
+                console.log(`[Window] Visibility: ${mainWindow.isVisible()}, Focused: ${mainWindow.isFocused()}`);
             });
 
             mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
@@ -476,14 +515,7 @@ if (!gotTheLock) {
                 globalShortcut.unregisterAll();
             });
 
-            mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
-                {urls: [appConfig.url + '/*']},
-                (details, callback) => {
-                    details.requestHeaders['Origin'] = appConfig.url;
-                    details.requestHeaders['Referer'] = appConfig.url;
-                    callback({requestHeaders: details.requestHeaders});
-                }
-            );
+            // Removed redundant onBeforeSendHeaders call
 
             mainWindow.on('resize', () => {
                 mainWindowState.saveState(mainWindow);
@@ -664,9 +696,13 @@ if (!gotTheLock) {
             // Enhanced security headers
             session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
                 const responseHeaders = { ...details.responseHeaders };
-                // Remove existing CSP and X-Frame-Options to avoid conflicts
+                // Remove existing CSP, X-Frame-Options, and COOP/CORP to avoid conflicts
                 Object.keys(responseHeaders).forEach(key => {
-                    if (key.toLowerCase() === 'content-security-policy' || key.toLowerCase() === 'x-frame-options') {
+                    const lowerKey = key.toLowerCase();
+                    if (lowerKey === 'content-security-policy' || 
+                        lowerKey === 'x-frame-options' || 
+                        lowerKey === 'cross-origin-opener-policy' ||
+                        lowerKey === 'cross-origin-resource-policy') {
                         delete responseHeaders[key];
                     }
                 });
@@ -675,7 +711,7 @@ if (!gotTheLock) {
                     responseHeaders: {
                         ...responseHeaders,
                         'Content-Security-Policy': [
-                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net data: blob:; " +
+                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
                             "frame-ancestors 'self' https://*.microsoft.com https://*.office.com; " +
                             "base-uri 'self';"
                         ],
