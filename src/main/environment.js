@@ -2,18 +2,20 @@
 const path = require('path');
 
 function detectEnvironmentCapabilities() {
+    const isSnap = !!(process.env.SNAP || process.env.SNAPCRAFT_PROJECT_NAME);
     return {
         hasHardwareAcceleration: process.env.DISABLE_GPU !== 'true' &&
+            !isSnap &&
             !(process.env.SSH_CLIENT || process.env.SSH_TTY || !process.env.DISPLAY),
         displayServer: process.env.XDG_SESSION_TYPE || 'x11',
         isContainer: !!process.env.container,
-        isSnap: true
+        isSnap: isSnap
     };
 }
 
 function applyEnvironment(app, appConfig) {
     // Determine Snap environment
-    const isSnap = process.env.SNAP && process.env.SNAPCRAFT_PROJECT_NAME;
+    const isSnap = process.env.SNAP || process.env.SNAPCRAFT_PROJECT_NAME;
 
     // Default
     let shouldDisableHardwareAcceleration;
@@ -52,6 +54,8 @@ function applyEnvironment(app, appConfig) {
         app.commandLine.appendSwitch('disable-gpu-rasterization');
         app.commandLine.appendSwitch('disable-gpu-compositing');
         app.commandLine.appendSwitch('disable-software-rasterizer');
+        app.commandLine.appendSwitch('use-gl', 'swiftshader');
+        app.commandLine.appendSwitch('enable-unsafe-swiftshader');
     } else {
         // Only disable hardware acceleration in specific problematic environments for non-Snap
         shouldDisableHardwareAcceleration = (
@@ -64,9 +68,13 @@ function applyEnvironment(app, appConfig) {
         if (shouldDisableHardwareAcceleration) {
             console.info('Disabling hardware acceleration due to environment constraints');
             app.disableHardwareAcceleration();
+            app.commandLine.appendSwitch('disable-gpu');
             app.commandLine.appendSwitch('disable-gpu-rasterization');
+            app.commandLine.appendSwitch('disable-gpu-compositing');
             app.commandLine.appendSwitch('disable-zero-copy');
             app.commandLine.appendSwitch('disable-software-rasterizer');
+            app.commandLine.appendSwitch('use-gl', 'swiftshader');
+            app.commandLine.appendSwitch('enable-unsafe-swiftshader');
         } else {
             console.info('Hardware acceleration enabled');
         }
@@ -75,8 +83,12 @@ function applyEnvironment(app, appConfig) {
     if (process.platform === 'linux') {
         // Wayland support
         if (process.env.XDG_SESSION_TYPE === 'wayland') {
-            app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WebRTCPipeWireCapturer');
-            app.commandLine.appendSwitch('ozone-platform', 'wayland');
+            if (shouldDisableHardwareAcceleration) {
+                console.info('Wayland detected with hardware acceleration disabled. Using software rendering without Ozone Wayland to avoid EGL errors.');
+            } else {
+                app.commandLine.appendSwitch('enable-features', 'UseOzonePlatform,WebRTCPipeWireCapturer');
+                app.commandLine.appendSwitch('ozone-platform-hint', 'auto');
+            }
         }
 
         // Add Linux-specific flags for better compatibility

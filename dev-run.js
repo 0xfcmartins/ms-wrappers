@@ -49,7 +49,13 @@ const packageJson = JSON.parse(fs.readFileSync(path.join(appDir, 'package.json')
 fs.writeFileSync(path.join(tempDir, 'package.json'), JSON.stringify(packageJson, null, 2));
 
 console.log(`Running ${appName} in development mode...`);
-const electron = spawn('npx', ['electron', '--enable-unsafe-swiftshader', tempDir], { stdio: 'inherit' });
+const electron = spawn('npx', ['electron', tempDir], { 
+  stdio: 'inherit',
+  env: {
+    ...process.env,
+    DISABLE_GPU: 'true'
+  }
+});
 
 electron.on('close', (code) => {
   console.log(`Electron process exited with code ${code}`);
