@@ -14,10 +14,13 @@ const allowedChannels = new Set([
   'get-app-version',
   
   // Zoom and display controls
+  'zoom-change',
+  'preload-executed',
   'get-zoom-level',
   'save-zoom-level',
   
   // Screen sharing and desktop capture - New secure implementation
+  'get-screen-sources-safe',
   'desktop-capturer-get-sources',
   'choose-desktop-media',
   'cancel-desktop-media',

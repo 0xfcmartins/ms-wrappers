@@ -1,8 +1,17 @@
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 
 const appName = process.argv[2] || 'teams';
+const targetArgIndex = process.argv.indexOf('--target');
+const buildTarget = targetArgIndex >= 0
+  ? process.argv[targetArgIndex + 1]
+  : (process.env.BUILD_TARGET || 'snap');
+const supportedBuildTargets = new Set(['snap', 'deb', 'AppImage']);
+if (!supportedBuildTargets.has(buildTarget)) {
+  console.error(`Unsupported build target "${buildTarget}". Use one of: ${Array.from(supportedBuildTargets).join(', ')}`);
+  process.exit(1);
+}
 const appDir = path.join(__dirname, 'apps', appName);
 
 // Safe recursive copy to avoid shelling out (prevents command injection)
@@ -31,6 +40,11 @@ if (!fs.existsSync(appDir)) {
 const buildDir = path.join(__dirname, 'build', appName);
 if (!fs.existsSync(buildDir)) {
   fs.mkdirSync(buildDir, { recursive: true });
+}
+
+function runElectronBuilder(args) {
+  const electronBuilderCli = path.join(buildDir, 'node_modules', 'electron-builder', 'out', 'cli', 'cli.js');
+  execFileSync(process.execPath, [electronBuilderCli, ...args], { cwd: buildDir, stdio: 'inherit' });
 }
 
 // Copy source files to build directory
@@ -103,21 +117,32 @@ try {
   process.exit(1);
 }
 
-console.log(`Building snap for ${appName}...`);
-try {
-  // Use snapcraft directly for better control
-  execSync('snapcraft --destructive-mode', { cwd: buildDir, stdio: 'inherit' });
-} catch (error) {
-  console.error('Snap build failed:', error.message);
-  // Try electron-builder as fallback
-  console.log('Trying electron-builder as fallback...');
+console.log(`Building ${buildTarget} package for ${appName}...`);
+if (buildTarget === 'snap') {
   try {
-    execSync('electron-builder --linux snap', { cwd: buildDir, stdio: 'inherit' });
+    // Use snapcraft directly for better control
+    execSync('snapcraft --destructive-mode', { cwd: buildDir, stdio: 'inherit' });
+  } catch (error) {
+    console.error('Snap build failed:', error.message);
+    // Try electron-builder as fallback
+    console.log('Trying electron-builder as fallback...');
+    try {
+      runElectronBuilder(['--linux', 'snap']);
+    } catch (builderError) {
+      console.error('Electron-builder also failed:', builderError.message);
+      process.exit(1);
+    }
+  }
+} else {
+  try {
+    runElectronBuilder(['--linux', buildTarget]);
   } catch (builderError) {
-    console.error('Electron-builder also failed:', builderError.message);
+    console.error(`Electron-builder failed for target "${buildTarget}":`, builderError.message);
     process.exit(1);
   }
 }
 
-console.log(`Build complete! Check ${buildDir} for the snap file`);
-console.log(`To install it locally, run: sudo snap install ${path.join(buildDir, '*.snap')} --dangerous`);
+console.log(`Build complete! Check ${path.join(buildDir, 'dist')} and ${buildDir} for generated packages.`);
+if (buildTarget === 'snap') {
+  console.log(`To install it locally, run: sudo snap install ${path.join(buildDir, '*.snap')} --dangerous`);
+}

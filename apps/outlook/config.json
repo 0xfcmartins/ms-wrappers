@@ -17,6 +17,7 @@
     "clipboard-read",
     "clipboard-write"
   ],
+  "preserveWebSecurityHeaders": true,
   "snapName": "outlook-ew",
   "snapDescription": "Microsoft Outlook web wrapper for Linux",
   "desktopName": "Microsoft Outlook",

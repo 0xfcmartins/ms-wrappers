@@ -1,6 +1,18 @@
 try {
   const { contextBridge, ipcRenderer } = require('electron');
-  const { allowedChannels } = require(require('path').resolve(__dirname, '..', 'security', 'ipcValidator.js'));
+  const allowedChannels = new Set([
+    'new-notification',
+    'preload-executed',
+    'zoom-change',
+    'trigger-screen-share',
+    'screen-sharing-stopped',
+    'screen-sharing-source-selected',
+    'screen-sharing-status-changed',
+    'get-screen-sharing-status',
+    'get-screen-share-stream',
+    'get-screen-share-screen',
+    'desktop-capturer-get-sources',
+  ]);
 
   contextBridge.exposeInMainWorld('api', {
     send: (channel, data) => {

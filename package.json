@@ -9,6 +9,8 @@
     "run:spotify": "npx electron /apps/spotify",
     "build:teams": "node build.js teams",
     "build:outlook": "node build.js outlook",
+    "build:outlook:deb": "node build.js outlook --target deb",
+    "build:outlook:appimage": "node build.js outlook --target AppImage",
     "build:spotify": "node build.js spotify",
     "dev:teams": "node dev-run.js teams",
     "dev:outlook": "node dev-run.js outlook",
