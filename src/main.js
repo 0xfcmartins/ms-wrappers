@@ -370,7 +370,8 @@ if (!gotTheLock) {
                     const url = details.url;
                     // Only override Origin and Referer for Microsoft-related requests to avoid ERR_BLOCKED_BY_RESPONSE
                     if (url.includes('microsoft.com') || url.includes('office.com') || url.includes('office365.com') || url.includes('live.com') || url.includes('msftauth.net') || url.includes('msauth.net')) {
-                        details.requestHeaders['Origin'] = appConfig.url;
+                        // Origin must be scheme://host only (no path), otherwise MS auth endpoints reject the request
+                        details.requestHeaders['Origin'] = new URL(appConfig.url).origin;
                         details.requestHeaders['Referer'] = appConfig.url;
                     }
                     callback({requestHeaders: details.requestHeaders});
@@ -424,8 +425,8 @@ if (!gotTheLock) {
                     responseHeaders: {
                         ...responseHeaders,
                         'Content-Security-Policy': [
-                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
-                            "frame-ancestors 'self' https://*.microsoft.com https://*.office.com; " +
+                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
+                            "frame-ancestors 'self' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.msauth.net https://*.msftauth.net; " +
                             "base-uri 'self';"
                         ]
                     }
@@ -711,8 +712,8 @@ if (!gotTheLock) {
                     responseHeaders: {
                         ...responseHeaders,
                         'Content-Security-Policy': [
-                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
-                            "frame-ancestors 'self' https://*.microsoft.com https://*.office.com; " +
+                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
+                            "frame-ancestors 'self' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.msauth.net https://*.msftauth.net; " +
                             "base-uri 'self';"
                         ],
                         'X-Content-Type-Options': ['nosniff']
