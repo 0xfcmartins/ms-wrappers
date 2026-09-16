@@ -158,11 +158,54 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.send('new-notification', data);
   }, 500);
 
+  // Strip icon-font placeholder glyphs (Private Use Area) and control chars mixed
+  // into Outlook's screen-reader announcement text. Filtered by code point rather
+  // than a \u-escape regex, since that form has previously been mangled into raw
+  // control bytes when this file was edited through some toolchains.
+  function cleanAnnouncedText(text) {
+    const PUA_START = 0xE000;
+    const PUA_END = 0xF8FF;
+    return Array.from(text)
+      .filter((ch) => {
+        const code = ch.codePointAt(0);
+        return code >= 32 && !(code >= PUA_START && code <= PUA_END);
+      })
+      .join('')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Outlook (outlook.office.com / outlook.cloud.microsoft) doesn't render a Teams-style
+  // toast element for new mail. Instead it updates a div[data-app-section="NotificationPane"]
+  // aria-live region with the new message's full row text (sender, subject, preview) for
+  // screen readers — that's the only reliable hook available for "new mail arrived".
+  function setupOutlookNotificationObserver(area) {
+    let lastText = '';
+
+    const observer = new MutationObserver(() => {
+      const raw = area.textContent;
+      if (!raw || raw === lastText) return;
+      lastText = raw;
+
+      const lines = raw.split(/\r?\n/).map(cleanAnnouncedText).filter(Boolean);
+      if (!lines.length) return;
+
+      throttledSendNotification({
+        title: lines[0].slice(0, 120),
+        body: (lines.slice(1).join(' ') || lines[0]).slice(0, 200)
+      });
+    });
+
+    observer.observe(area, {childList: true, subtree: true, characterData: true});
+    console.log('✅ Outlook notification MutationObserver active on NotificationPane!');
+  }
+
   window.addEventListener('DOMContentLoaded', () => {
 
     function setupNotificationObserver() {
-      let notificationsArea = document.querySelector('div[data-tid="app-layout-area--notifications"]')
-          || document.querySelector('div[data-app-section="NotificationPane"]');
+      const teamsArea = document.querySelector('div[data-tid="app-layout-area--notifications"]');
+      const outlookArea = !teamsArea && document.querySelector('div[data-app-section="NotificationPane"]');
+      const notificationsArea = teamsArea || outlookArea;
 
       if (!notificationsArea) {
         setTimeout(setupNotificationObserver, 100);
@@ -170,6 +213,11 @@ contextBridge.exposeInMainWorld('electron', {
       }
 
       console.log('✅ Found notifications area, setting up targeted observer');
+
+      if (outlookArea) {
+        setupOutlookNotificationObserver(outlookArea);
+        return;
+      }
 
       const observer = new MutationObserver((mutationsList) => {
         for (const mutation of mutationsList) {
