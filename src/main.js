@@ -228,6 +228,7 @@ if (!gotTheLock) {
 } else {
 
     let mainWindow = null;
+    let notificationApi = null;
 
     app.on('second-instance', () => {
         if (mainWindow) {
@@ -401,10 +402,15 @@ if (!gotTheLock) {
 
             mainWindow.webContents.on('console-message', (event, level, message) => {
                 if (message && message.includes('Uncaught (in promise) AbortError: Registration failed - push service not available')) {
-                    ipcMain.emit('new-notification', null, {
-                        title: 'System notifications are inactive',
-                        body: 'Please switch application notification mode to "Alert" for proper notifications.'
-                    });
+                    // Call the notifier directly rather than faking an IPC event: ipcMain.on
+                    // handlers here are wrapped for IPC security and read event.sender.id,
+                    // which throws when there's no real sender (e.g. via ipcMain.emit(..., null, ...)).
+                    if (notificationApi) {
+                        notificationApi.showAppNotification(
+                            'System notifications are inactive',
+                            'Please switch application notification mode to "Alert" for proper notifications.'
+                        );
+                    }
                 }
             });
 
@@ -659,7 +665,18 @@ if (!gotTheLock) {
                 createSecondaryWindow(appConfig.url);
             } else if (key === 'm' && appConfig.snapName === 'outlook-ew') {
                 event.preventDefault();
-                createSecondaryWindow('https://outlook.office.com/mail/deeplink/compose');
+                // Load the normal mail shell (not the bare compose deep link) so the
+                // new window keeps full nav (Calendar, People, ...), then trigger
+                // OWA's own single-key "N" new-message shortcut once it has booted.
+                const composeWindow = createSecondaryWindow(appConfig.url);
+                composeWindow.webContents.once('did-finish-load', () => {
+                    setTimeout(() => {
+                        if (composeWindow.isDestroyed()) return;
+                        composeWindow.webContents.sendInputEvent({type: 'keyDown', keyCode: 'N'});
+                        composeWindow.webContents.sendInputEvent({type: 'char', keyCode: 'N'});
+                        composeWindow.webContents.sendInputEvent({type: 'keyUp', keyCode: 'N'});
+                    }, 2500);
+                });
             }
         });
     }
@@ -829,7 +846,7 @@ if (!gotTheLock) {
                 iconPath: trayIcon
             });
 
-            setupNotifications(mainWindow, icon);
+            notificationApi = setupNotifications(mainWindow, icon);
 
             setInterval(() => {
                 if (global.gc) {
@@ -882,114 +899,13 @@ if (!gotTheLock) {
             }
         });
 
-        // Handle trigger screen sharing from renderer process API
-        ipcMain.on("trigger-screen-share", () => {
-            console.log('[ScreenShare] Screen sharing triggered from renderer API');
-
-            if (!mainWindow || mainWindow.isDestroyed()) {
-                console.error('[ScreenShare] Main window not available');
-                return;
-            }
-
-            // Use StreamSelector for source selection
-            streamSelector.show((selectedSource) => {
-                if (selectedSource) {
-                    console.log(`[ScreenShare] Source selected via API: ${selectedSource.name} (${selectedSource.id})`);
-                    // Set up screen sharing state
-                    global.selectedScreenShareSource = selectedSource;
-
-                    // Send the selected source back to renderer for Teams to use
-                    mainWindow.webContents.send("screen-sharing-source-selected", {
-                        sourceId: selectedSource.id,
-                        sourceName: selectedSource.name,
-                        isActive: true
-                    });
-                } else {
-                    console.log('[ScreenShare] Selection cancelled via API');
-                    // Notify renderer of cancelled selection - this won't interfere with camera
-                    mainWindow.webContents.send("screen-sharing-source-selected", {
-                        isActive: false,
-                        cancelled: true
-                    });
-                }
-            });
-        });
-
-        // Handle screen sharing stopped - clear state
-        ipcMain.on("screen-sharing-stopped", () => {
-            console.log('[ScreenShare] Screen sharing stopped');
-            global.selectedScreenShareSource = null;
-
-            if (previewWindow) {
-                previewWindow.close();
-            }
-
-            // Notify renderer process of status change
-            if (mainWindow && !mainWindow.isDestroyed()) {
-                mainWindow.webContents.send("screen-sharing-status-changed", {isActive: false});
-            }
-        });
-
-        // Status and stream handlers for compatibility
-        ipcMain.handle("get-screen-sharing-status", () => {
-            const isActive = global.selectedScreenShareSource !== null;
-            console.log(`[ScreenShare] Status requested: ${isActive}`);
-            return isActive;
-        });
-
-        ipcMain.handle("get-screen-share-stream", async () => {
-            // Return the source ID - handle both string and object formats
-            if (typeof global.selectedScreenShareSource === "string") {
-                return global.selectedScreenShareSource;
-            } else if (global.selectedScreenShareSource?.id) {
-                // Validate that the source still exists (handle display changes)
-                try {
-                    const sources = await desktopCapturer.getSources({types: ['window', 'screen']});
-                    const sourceExists = sources.find(s => s.id === global.selectedScreenShareSource.id);
-
-                    if (!sourceExists) {
-                        console.warn('[ScreenShare] Selected source no longer available, clearing state');
-                        global.selectedScreenShareSource = null;
-                        return null;
-                    }
-                } catch (error) {
-                    console.error('[ScreenShare] Error validating source:', error);
-                    return global.selectedScreenShareSource.id;
-                }
-
-                return global.selectedScreenShareSource.id;
-            }
-            console.log('[ScreenShare] No active screen share stream');
-            return null;
-        });
-
-        ipcMain.handle("get-screen-share-screen", () => {
-            // Return screen dimensions if available, otherwise default
-            if (
-                global.selectedScreenShareSource &&
-                typeof global.selectedScreenShareSource === "object"
-            ) {
-                const {screen} = require("electron");
-                const displays = screen.getAllDisplays();
-
-                if (global.selectedScreenShareSource?.id?.startsWith("screen:")) {
-                    const display = displays[0] || {size: {width: 1920, height: 1080}};
-                    console.log(`[ScreenShare] Screen dimensions: ${display.size.width}x${display.size.height}`);
-                    return {width: display.size.width, height: display.size.height};
-                }
-            }
-
-            console.log('[ScreenShare] Using default screen dimensions');
-            return {width: 1920, height: 1080};
-        });
-
-        // Legacy compatibility handlers for desktop capture
-        ipcMain.handle("desktop-capturer-get-sources", (_event, opts) => {
-            console.log('[ScreenShare] Desktop capturer sources requested');
-            return desktopCapturer.getSources(opts);
-        });
-
-        console.log('[ScreenShare] IPC handlers initialized');
+        // The rest of the screen-sharing IPC surface (trigger/stop/status/stream/
+        // screen/desktop-capturer-get-sources) is implemented in screenShare.js,
+        // which is also what screenShare.init() wires the actual StreamSelector
+        // instance into. This used to be duplicated here with its own bare
+        // `streamSelector`/`previewWindow` references that were never declared
+        // in this file, so triggering screen share threw a ReferenceError.
+        screenShare.setupIpcHandlers(ipcMain);
     }
 
     // macOS media permissions handler

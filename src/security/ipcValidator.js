@@ -16,6 +16,7 @@ const allowedChannels = new Set([
   // Zoom and display controls
   'get-zoom-level',
   'save-zoom-level',
+  'zoom-change',
   
   // Screen sharing and desktop capture - New secure implementation
   'desktop-capturer-get-sources',
@@ -31,14 +32,13 @@ const allowedChannels = new Set([
   'resize-preview-window',
   'minimize-preview-window',
   'close-preview-window',
-  'close-preview-window',
-  'close-preview-window',
   'stop-screen-sharing-from-thumbnail',
   // Internal StreamSelector IPC
   'source-selected',
   'selection-cancelled',
   
   // Notifications and user interaction
+  'new-notification',
   'play-notification-sound',
   'show-notification',
   'user-status-changed',
@@ -60,7 +60,8 @@ const allowedChannels = new Set([
   
   // Connection management
   'offline-retry',
-  'stop-sharing'
+  'stop-sharing',
+  'preload-executed'
 ]);
 
 /**

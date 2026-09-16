@@ -1,6 +1,52 @@
 try {
   const { contextBridge, ipcRenderer } = require('electron');
-  const { allowedChannels } = require(require('path').resolve(__dirname, '..', 'security', 'ipcValidator.js'));
+
+  // Duplicated from src/security/ipcValidator.js rather than required dynamically:
+  // sandboxed preload scripts (the default since Electron 20, and always on for
+  // child/popup windows such as OAuth popups) can only require a fixed set of
+  // built-in modules, not arbitrary local files resolved at runtime. Keep this
+  // list in sync with ipcValidator.js's allowedChannels.
+  const allowedChannels = new Set([
+    'config-file-changed',
+    'get-config',
+    'get-system-idle-state',
+    'get-app-version',
+    'get-zoom-level',
+    'save-zoom-level',
+    'zoom-change',
+    'desktop-capturer-get-sources',
+    'choose-desktop-media',
+    'cancel-desktop-media',
+    'trigger-screen-share',
+    'screen-sharing-started',
+    'screen-sharing-stopped',
+    'screen-sharing-source-selected',
+    'get-screen-sharing-status',
+    'get-screen-share-stream',
+    'get-screen-share-screen',
+    'resize-preview-window',
+    'minimize-preview-window',
+    'close-preview-window',
+    'stop-screen-sharing-from-thumbnail',
+    'source-selected',
+    'selection-cancelled',
+    'new-notification',
+    'play-notification-sound',
+    'show-notification',
+    'user-status-changed',
+    'set-badge-count',
+    'tray-update',
+    'incoming-call-created',
+    'incoming-call-ended',
+    'incoming-call-action',
+    'call-connected',
+    'call-disconnected',
+    'submitForm',
+    'get-custom-bg-list',
+    'offline-retry',
+    'stop-sharing',
+    'preload-executed'
+  ]);
 
   contextBridge.exposeInMainWorld('api', {
     send: (channel, data) => {
@@ -146,12 +192,6 @@ contextBridge.exposeInMainWorld('electron', {
               }
             }
 
-            Array.from(mutation.addedNodes).forEach(node => {
-              console.log(node);
-              console.log(node.outerHTML);
-              console.log('-----');
-              console.log(node.innerText);
-            });
 
             mutation.addedNodes.forEach(node => {
               if (node.nodeType === Node.ELEMENT_NODE) {

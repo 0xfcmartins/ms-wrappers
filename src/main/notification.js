@@ -46,6 +46,8 @@ function setupNotifications(mainWindow, iconPath) {
   });
 
   console.log('Notification event loaded!');
+
+  return {showAppNotification};
 }
 
 module.exports = {setupNotifications};
