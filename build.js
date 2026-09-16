@@ -66,7 +66,8 @@ const snapcraftYaml = snapcraftTemplate
   .replace(/{{APP_NAME}}/g, config.snapName)
   .replace(/{{APP_DESCRIPTION}}/g, config.snapDescription)
   .replace(/{{DESKTOP_NAME}}/g, config.desktopName)
-  .replace(/{{DESKTOP_CATEGORIES}}/g, config.desktopCategories);
+  .replace(/{{DESKTOP_CATEGORIES}}/g, config.desktopCategories)
+  .replace(/{{APP_VERSION}}/g, packageJson.version);
 
 fs.writeFileSync(path.join(buildDir, 'snapcraft.yaml'), snapcraftYaml);
 
