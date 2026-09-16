@@ -541,6 +541,7 @@ if (!gotTheLock) {
             setupExternalLinks(mainWindow);
             setupCloseEvent(mainWindow);
             setupNetworkMonitoring(mainWindow);
+            setupWindowShortcuts(mainWindow);
 
             if (!isSnap) {
                 enableLightPerformanceMode();
@@ -578,6 +579,89 @@ if (!gotTheLock) {
             createWindow();
         }
         return mainWindow;
+    }
+
+    // Extra top-level windows opened via hotkey (e.g. a second mail window, or
+    // a calendar navigated to manually). Unlike mainWindow these close for real
+    // instead of hiding to tray, and there can be any number of them.
+    const secondaryWindows = new Set();
+
+    function createSecondaryWindow(targetUrl) {
+        const secondaryWindow = new BrowserWindow({
+            width: appConfig.windowOptions.width,
+            height: appConfig.windowOptions.height,
+            minWidth: appConfig.windowOptions.minWidth,
+            minHeight: appConfig.windowOptions.minHeight,
+            icon: icon,
+            title: appConfig.name,
+            show: false,
+            backgroundColor: '#ffffff',
+            webPreferences: {
+                plugins: true,
+                nodeIntegration: false,
+                contextIsolation: true,
+                preload: path.resolve(__dirname, 'preload', 'index.js'),
+                autoplayPolicy: 'user-gesture-required',
+                // Same persisted partition as mainWindow, so the new window
+                // reuses the existing O365 session instead of prompting login again.
+                partition: 'persist:' + appConfig.snapName,
+                webgl: true,
+                allowRunningInsecureContent: false,
+                webSecurity: true,
+                backgroundThrottling: false,
+                offscreen: false,
+                zoomFactor: 1.0,
+            },
+        });
+
+        secondaryWindow.webContents.setUserAgent(appConfig.userAgent);
+        secondaryWindow.removeMenu();
+
+        secondaryWindow.loadURL(targetUrl, {
+            userAgent: appConfig.userAgent,
+            httpReferrer: appConfig.url
+        }).catch(err => console.error('[Window] Error loading secondary window URL:', err));
+
+        secondaryWindow.webContents.once('ready-to-show', () => {
+            secondaryWindow.show();
+            secondaryWindow.focus();
+        });
+
+        secondaryWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+            console.error(`[Window] Secondary window failed to load: ${errorDescription} (${errorCode}) at ${validatedURL}`);
+        });
+
+        setupZoomControls(secondaryWindow);
+        setupExternalLinks(secondaryWindow);
+        setupDownloadHandler(secondaryWindow);
+        setupWindowShortcuts(secondaryWindow);
+
+        secondaryWindows.add(secondaryWindow);
+        secondaryWindow.on('closed', () => {
+            secondaryWindows.delete(secondaryWindow);
+        });
+
+        console.log(`[Window] Opened secondary window: ${targetUrl}`);
+        return secondaryWindow;
+    }
+
+    // In-window hotkeys for multi-window workflows (only active while the
+    // window itself is focused, unlike an OS-wide globalShortcut).
+    function setupWindowShortcuts(window) {
+        window.webContents.on('before-input-event', (event, input) => {
+            if (input.type !== 'keyDown' || !(input.control || input.meta) || !input.shift) {
+                return;
+            }
+
+            const key = input.key.toLowerCase();
+            if (key === 'n') {
+                event.preventDefault();
+                createSecondaryWindow(appConfig.url);
+            } else if (key === 'm' && appConfig.snapName === 'outlook-ew') {
+                event.preventDefault();
+                createSecondaryWindow('https://outlook.office.com/mail/deeplink/compose');
+            }
+        });
     }
 
     function setupDownloadHandler(window) {
@@ -643,9 +727,19 @@ if (!gotTheLock) {
                 return {
                     action: 'allow',
                     overrideBrowserWindowOptions: {
-                        menuBarVisible: true,
-                        toolbar: true,
+                        icon,
+                        title: appConfig.name,
                         frame: true,
+                        webPreferences: {
+                            nodeIntegration: false,
+                            contextIsolation: true,
+                            preload: path.resolve(__dirname, 'preload', 'index.js'),
+                            // Without this, popups (e.g. OWA's "open calendar in new
+                            // window") fall back to Electron's default session and
+                            // prompt for O365 login again instead of reusing this one.
+                            partition: 'persist:' + appConfig.snapName,
+                            webSecurity: true,
+                        }
                     }
                 };
             }
@@ -655,6 +749,18 @@ if (!gotTheLock) {
             }
 
             return {action: 'deny'};
+        });
+
+        // Configure windows the page opens itself (e.g. a calendar/compose pop-out)
+        // the same way we configure our own windows, instead of leaving them with
+        // Electron's bare defaults.
+        window.webContents.on('did-create-window', (childWindow) => {
+            childWindow.removeMenu();
+            childWindow.webContents.setUserAgent(appConfig.userAgent);
+            setupZoomControls(childWindow);
+            setupExternalLinks(childWindow);
+            setupDownloadHandler(childWindow);
+            setupWindowShortcuts(childWindow);
         });
     }
 
