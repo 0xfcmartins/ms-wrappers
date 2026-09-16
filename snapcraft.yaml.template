@@ -101,7 +101,7 @@ parts:
       done
 
       cat > $SNAPCRAFT_PART_INSTALL/bin/desktop-launch << 'EOF'
-    #!/bin/bash
+      #!/bin/bash
       export LD_LIBRARY_PATH="$SNAP/usr/lib:$LD_LIBRARY_PATH"
       export ICU_DATA_DIR="$SNAP/usr/share/icu"
       
@@ -146,32 +146,32 @@ parts:
       - usr/lib/libffmpeg.so
       - usr/share/icu/icudtl.dat
 
-    icu-data:
-      plugin: nil
-      after: [electron]
-      override-build: |
-        mkdir -p $SNAPCRAFT_PART_INSTALL/usr/share/icu
-        if [ -f "/usr/lib/chromium/icudtl.dat" ]; then
-            cp /usr/lib/chromium/icudtl.dat $SNAPCRAFT_PART_INSTALL/usr/share/icu/
-        fi
-      build-packages:
-        - chromium-common
-      prime:
-        - usr/share/icu/icudtl.dat
+  icu-data:
+    plugin: nil
+    after: [electron]
+    override-build: |
+      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/share/icu
+      if [ -f "/usr/lib/chromium/icudtl.dat" ]; then
+          cp /usr/lib/chromium/icudtl.dat $SNAPCRAFT_PART_INSTALL/usr/share/icu/
+      fi
+    build-packages:
+      - chromium-common
+    prime:
+      - usr/share/icu/icudtl.dat
 
-    chromium-ffmpeg:
-      plugin: nil
-      after: [electron, icu-data]
-      override-build: |
-        mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib
-        apt-get update
-        apt-get install -y chromium-codecs-ffmpeg-extra
-        if [ -f "/usr/lib/chromium-browser/libffmpeg.so" ]; then
-            cp /usr/lib/chromium-browser/libffmpeg.so $SNAPCRAFT_PART_INSTALL/usr/lib/
-        elif [ -f "/usr/lib/chromium/libffmpeg.so" ]; then
-            cp /usr/lib/chromium/libffmpeg.so $SNAPCRAFT_PART_INSTALL/usr/lib/
-        fi
-      build-packages:
-        - chromium-codecs-ffmpeg-extra
-      prime:
-        - usr/lib/libffmpeg.so
+  chromium-ffmpeg:
+    plugin: nil
+    after: [electron, icu-data]
+    override-build: |
+      mkdir -p $SNAPCRAFT_PART_INSTALL/usr/lib
+      apt-get update
+      apt-get install -y chromium-codecs-ffmpeg-extra
+      if [ -f "/usr/lib/chromium-browser/libffmpeg.so" ]; then
+          cp /usr/lib/chromium-browser/libffmpeg.so $SNAPCRAFT_PART_INSTALL/usr/lib/
+      elif [ -f "/usr/lib/chromium/libffmpeg.so" ]; then
+          cp /usr/lib/chromium/libffmpeg.so $SNAPCRAFT_PART_INSTALL/usr/lib/
+      fi
+    build-packages:
+      - chromium-codecs-ffmpeg-extra
+    prime:
+      - usr/lib/libffmpeg.so
