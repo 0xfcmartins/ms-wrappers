@@ -582,22 +582,18 @@ if (!gotTheLock) {
 
     function setupDownloadHandler(window) {
         const targetSession = window ? window.webContents.session : session.defaultSession;
-        targetSession.on('will-download', async (event, item) => {
+        targetSession.on('will-download', (event, item) => {
             const fileName = item.getFilename();
             const totalBytes = item.getTotalBytes();
 
-            const {filePath, canceled} = await dialog.showSaveDialog({
+            // item.setSavePath() must be called synchronously here, so we can't await
+            // our own dialog first — doing so leaves Electron's built-in save dialog
+            // to fire as a fallback, producing two prompts. setSaveDialogOptions()
+            // lets Electron show a single dialog with our title/default path instead.
+            item.setSaveDialogOptions({
                 title: 'Save Download',
                 defaultPath: path.join(app.getPath('downloads'), fileName)
             });
-
-            if (canceled || !filePath) {
-                item.cancel();
-                console.log('Download canceled by the user.');
-                return;
-            }
-
-            item.setSavePath(filePath);
             console.log(`Starting download of ${fileName}`);
 
             item.on('updated', (event, state) => {
@@ -610,7 +606,9 @@ if (!gotTheLock) {
 
             item.once('done', (event, state) => {
                 if (state === 'completed') {
-                    console.log(`Download saved to ${filePath}`);
+                    console.log(`Download saved to ${item.getSavePath()}`);
+                } else if (state === 'cancelled') {
+                    console.log('Download canceled by the user.');
                 } else {
                     console.error(`Download failed: ${state}`);
                 }
