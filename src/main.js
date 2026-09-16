@@ -410,27 +410,17 @@ if (!gotTheLock) {
 
             mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
                 const responseHeaders = { ...details.responseHeaders };
-                // Remove existing CSP, X-Frame-Options, and COOP/CORP to avoid conflicts
+                // Strip embedding-blocker headers but keep Microsoft's own CSP intact.
                 Object.keys(responseHeaders).forEach(key => {
                     const lowerKey = key.toLowerCase();
-                    if (lowerKey === 'content-security-policy' || 
-                        lowerKey === 'x-frame-options' || 
+                    if (lowerKey === 'x-frame-options' ||
                         lowerKey === 'cross-origin-opener-policy' ||
                         lowerKey === 'cross-origin-resource-policy') {
                         delete responseHeaders[key];
                     }
                 });
 
-                callback({
-                    responseHeaders: {
-                        ...responseHeaders,
-                        'Content-Security-Policy': [
-                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
-                            "frame-ancestors 'self' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.msauth.net https://*.msftauth.net; " +
-                            "base-uri 'self';"
-                        ]
-                    }
-                });
+                callback({ responseHeaders });
             });
 
             mainWindow.loadURL(appConfig.url, {
@@ -694,14 +684,12 @@ if (!gotTheLock) {
             // Setup enhanced memory management
             setupEnhancedMemoryManagement();
 
-            // Enhanced security headers
             session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
                 const responseHeaders = { ...details.responseHeaders };
-                // Remove existing CSP, X-Frame-Options, and COOP/CORP to avoid conflicts
+                // Strip embedding-blocker headers but keep Microsoft's own CSP intact.
                 Object.keys(responseHeaders).forEach(key => {
                     const lowerKey = key.toLowerCase();
-                    if (lowerKey === 'content-security-policy' || 
-                        lowerKey === 'x-frame-options' || 
+                    if (lowerKey === 'x-frame-options' ||
                         lowerKey === 'cross-origin-opener-policy' ||
                         lowerKey === 'cross-origin-resource-policy') {
                         delete responseHeaders[key];
@@ -711,11 +699,6 @@ if (!gotTheLock) {
                 callback({
                     responseHeaders: {
                         ...responseHeaders,
-                        'Content-Security-Policy': [
-                            "default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.bing.com https://*.office.net https://*.msauth.net https://*.msftauth.net data: blob:; " +
-                            "frame-ancestors 'self' https://*.microsoft https://*.microsoft.com https://*.microsoftonline.com https://*.office.com https://*.office365.com https://*.live.com https://*.msauth.net https://*.msftauth.net; " +
-                            "base-uri 'self';"
-                        ],
                         'X-Content-Type-Options': ['nosniff']
                     }
                 });
