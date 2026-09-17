@@ -193,10 +193,24 @@ contextBridge.exposeInMainWorld('electron', {
     return parts.join(' ');
   }
 
+  function truncateAtWord(text, maxLength) {
+    if (text.length <= maxLength) return text;
+    const slice = text.slice(0, maxLength + 1);
+    const lastSpace = slice.lastIndexOf(' ');
+    return (lastSpace > 0 ? slice.slice(0, lastSpace) : text.slice(0, maxLength)).trim();
+  }
+
+  // The NotificationPane region is also used for the Reminders flyout (meeting
+  // popups), which re-announces itself every time its "Xm ago"/"in Xm" countdown
+  // ticks — that's not a new-mail event, and re-announcing it every minute would
+  // spam duplicate notifications. "Dismiss all" is that flyout's own action
+  // button label and won't appear in a mail row, so use it to filter this out.
+  const NON_MAIL_PATTERNS = [/dispensar tudo/i, /dismiss all/i];
+
   // Outlook (outlook.office.com / outlook.cloud.microsoft) doesn't render a Teams-style
   // toast element for new mail. Instead it updates a div[data-app-section="NotificationPane"]
-  // aria-live region with the announcement text (new message row, reminder popup, etc.) for
-  // screen readers — that's the only reliable hook available for these events.
+  // aria-live region with the new message's row text for screen readers — that's the only
+  // reliable hook available for "new mail arrived".
   function setupOutlookNotificationObserver(area) {
     let lastText = '';
     const TITLE_LENGTH = 60;
@@ -207,12 +221,12 @@ contextBridge.exposeInMainWorld('electron', {
       lastText = raw;
 
       const cleaned = cleanAnnouncedText(raw);
-      if (!cleaned) return;
+      if (!cleaned || NON_MAIL_PATTERNS.some((p) => p.test(cleaned))) return;
 
-      throttledSendNotification({
-        title: cleaned.slice(0, TITLE_LENGTH),
-        body: cleaned.length > TITLE_LENGTH ? cleaned.slice(TITLE_LENGTH, TITLE_LENGTH + 200) : cleaned
-      });
+      const title = truncateAtWord(cleaned, TITLE_LENGTH);
+      const body = cleaned.length > title.length ? cleaned.slice(title.length).trim().slice(0, 200) : title;
+
+      throttledSendNotification({title, body});
     });
 
     observer.observe(area, {childList: true, subtree: true, characterData: true});

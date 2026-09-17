@@ -6,6 +6,9 @@ function setupNotifications(mainWindow, iconPath) {
   function showAppNotification(title, body) {
     try {
       const notificationIcon = iconPath ? nativeImage.createFromPath(iconPath) : null;
+      if (!notificationIcon || notificationIcon.isEmpty()) {
+        console.warn(`[Notification] Icon failed to load from path: ${iconPath}`);
+      }
 
       const notification = new Notification({
         title: title,
