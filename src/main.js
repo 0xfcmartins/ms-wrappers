@@ -651,6 +651,75 @@ if (!gotTheLock) {
         return secondaryWindow;
     }
 
+    // Outlook's own compose pane has a "pop out" button (id="popoutCompose",
+    // aria-label "Isolar"/"Pop out" depending on locale — the id is stable
+    // across locales) that calls window.open('about:blank', ...) and renders
+    // the standalone compose UI into it directly. That popup is created by our
+    // own setWindowOpenHandler/did-create-window path below (about:blank is
+    // already allowed there), so we get Outlook's real standalone compose
+    // window — same session, same styling — just by driving that button
+    // ourselves from a hidden helper window instead of guessing a URL for it.
+    function openStandaloneComposeWindow() {
+        const helper = new BrowserWindow({
+            width: appConfig.windowOptions.width,
+            height: appConfig.windowOptions.height,
+            show: false,
+            webPreferences: {
+                nodeIntegration: false,
+                contextIsolation: true,
+                preload: path.resolve(__dirname, 'preload', 'index.js'),
+                partition: 'persist:' + appConfig.snapName,
+                webSecurity: true,
+            },
+        });
+
+        // So the popped-out compose window (a child of this helper) gets the same
+        // session/zoom/download handling as any other window we open.
+        setupExternalLinks(helper);
+
+        helper.loadURL(appConfig.url, {
+            userAgent: appConfig.userAgent,
+            httpReferrer: appConfig.url
+        }).catch(err => console.error('[Window] Error loading compose helper URL:', err));
+
+        helper.webContents.once('did-finish-load', () => {
+            setTimeout(async () => {
+                try {
+                    // Outlook's own single-key "N" shortcut opens the compose pane.
+                    helper.webContents.sendInputEvent({type: 'keyDown', keyCode: 'N'});
+                    helper.webContents.sendInputEvent({type: 'char', keyCode: 'N'});
+                    helper.webContents.sendInputEvent({type: 'keyUp', keyCode: 'N'});
+
+                    // Wait for the compose pane's pop-out button to render, then click it.
+                    const clicked = await helper.webContents.executeJavaScript(`
+                        new Promise((resolve) => {
+                            const deadline = Date.now() + 8000;
+                            (function poll() {
+                                const btn = document.getElementById('popoutCompose');
+                                if (btn) {
+                                    btn.click();
+                                    resolve(true);
+                                } else if (Date.now() > deadline) {
+                                    resolve(false);
+                                } else {
+                                    setTimeout(poll, 150);
+                                }
+                            })();
+                        });
+                    `);
+                    if (!clicked) {
+                        console.error('[Window] Timed out waiting for Outlook\'s pop-out compose button');
+                    }
+                } catch (err) {
+                    console.error('[Window] Error driving compose pop-out:', err);
+                } finally {
+                    // Only needed to get Outlook to open the real popout window above.
+                    if (!helper.isDestroyed()) helper.close();
+                }
+            }, 2000);
+        });
+    }
+
     // In-window hotkeys for multi-window workflows (only active while the
     // window itself is focused, unlike an OS-wide globalShortcut).
     function setupWindowShortcuts(window) {
@@ -665,18 +734,7 @@ if (!gotTheLock) {
                 createSecondaryWindow(appConfig.url);
             } else if (key === 'm' && appConfig.snapName === 'outlook-ew') {
                 event.preventDefault();
-                // Load the normal mail shell (not the bare compose deep link) so the
-                // new window keeps full nav (Calendar, People, ...), then trigger
-                // OWA's own single-key "N" new-message shortcut once it has booted.
-                const composeWindow = createSecondaryWindow(appConfig.url);
-                composeWindow.webContents.once('did-finish-load', () => {
-                    setTimeout(() => {
-                        if (composeWindow.isDestroyed()) return;
-                        composeWindow.webContents.sendInputEvent({type: 'keyDown', keyCode: 'N'});
-                        composeWindow.webContents.sendInputEvent({type: 'char', keyCode: 'N'});
-                        composeWindow.webContents.sendInputEvent({type: 'keyUp', keyCode: 'N'});
-                    }, 2500);
-                });
+                openStandaloneComposeWindow();
             }
         });
     }
