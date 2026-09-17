@@ -205,6 +205,37 @@ contextBridge.exposeInMainWorld('electron', {
     return (lastSpace > 0 ? slice.slice(0, lastSpace) : text.slice(0, maxLength)).trim();
   }
 
+  // A mail row's announced text looks like:
+  //   "FM Francisco Martins (Sem assunto) INFORMATIVO · Externo Esta mensagem ..."
+  //    ^avatar initials      ^subject      ^category  ^flag  ^actual preview text
+  // " · " reliably separates the category+flag from everything else, so use it to
+  // pull out just "sender + subject" as the title and the real preview as the
+  // body, instead of showing the category/flag noise. Falls back to a plain
+  // word-boundary truncation when that separator isn't present (e.g. internal
+  // senders may not get a flag at all).
+  function splitMailAnnouncement(cleaned, maxTitleLength) {
+    const dotIndex = cleaned.indexOf(' · ');
+    if (dotIndex === -1) {
+      const title = truncateAtWord(cleaned, maxTitleLength);
+      const body = cleaned.length > title.length ? cleaned.slice(title.length).trim() : title;
+      return {title, body};
+    }
+
+    const beforeWords = cleaned.slice(0, dotIndex).trim().split(' ');
+    beforeWords.pop(); // drop the category label (e.g. "INFORMATIVO")
+    const afterWords = cleaned.slice(dotIndex + 3).trim().split(' ');
+    afterWords.shift(); // drop the flag label (e.g. "Externo")
+
+    let nameAndSubject = beforeWords.join(' ').trim();
+    nameAndSubject = nameAndSubject.replace(/^\S{1,3}\s+/, ''); // drop leading avatar initials
+    const preview = afterWords.join(' ').trim();
+
+    return {
+      title: nameAndSubject.slice(0, maxTitleLength) || truncateAtWord(cleaned, maxTitleLength),
+      body: preview || nameAndSubject
+    };
+  }
+
   // The NotificationPane region is also used for the Reminders flyout (meeting
   // popups), which re-announces itself every time its "Xm ago"/"in Xm" countdown
   // ticks — that's not a new-mail event, and re-announcing it every minute would
@@ -228,10 +259,9 @@ contextBridge.exposeInMainWorld('electron', {
       const cleaned = cleanAnnouncedText(raw);
       if (!cleaned || NON_MAIL_PATTERNS.some((p) => p.test(cleaned))) return;
 
-      const title = truncateAtWord(cleaned, TITLE_LENGTH);
-      const body = cleaned.length > title.length ? cleaned.slice(title.length).trim().slice(0, 200) : title;
+      const {title, body} = splitMailAnnouncement(cleaned, TITLE_LENGTH);
 
-      throttledSendNotification({title, body});
+      throttledSendNotification({title, body: body.slice(0, 200)});
     });
 
     observer.observe(area, {childList: true, subtree: true, characterData: true});
