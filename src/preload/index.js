@@ -161,14 +161,19 @@ contextBridge.exposeInMainWorld('electron', {
   // Strip icon-font placeholder glyphs (Private Use Area) and control chars mixed
   // into Outlook's screen-reader announcement text. Filtered by code point rather
   // than a \u-escape regex, since that form has previously been mangled into raw
-  // control bytes when this file was edited through some toolchains.
+  // control bytes when this file was edited through some toolchains. Replaced
+  // with a space rather than dropped outright — a control char here is usually a
+  // line break separating two pieces of text (e.g. sender line vs preview line),
+  // and deleting it outright glues the words on either side together.
   function cleanAnnouncedText(text) {
     const PUA_START = 0xE000;
     const PUA_END = 0xF8FF;
     return Array.from(text)
-      .filter((ch) => {
+      .map((ch) => {
         const code = ch.codePointAt(0);
-        return code >= 32 && !(code >= PUA_START && code <= PUA_END);
+        const isControl = code < 32;
+        const isPUA = code >= PUA_START && code <= PUA_END;
+        return (isControl || isPUA) ? ' ' : ch;
       })
       .join('')
       .replace(/\s+/g, ' ')
