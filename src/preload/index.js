@@ -175,24 +175,43 @@ contextBridge.exposeInMainWorld('electron', {
       .trim();
   }
 
+  // element.textContent glues adjacent elements' text together with no separator
+  // (e.g. a sender name div right next to a subject span comes out
+  // "Jane Doe(No subject)" with nothing between them). Walk to each leaf text
+  // node and join with an explicit space instead, so words never merge.
+  function extractSpacedText(el) {
+    const parts = [];
+    const walk = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent.trim();
+        if (text) parts.push(text);
+      } else if (node.nodeType === Node.ELEMENT_NODE) {
+        node.childNodes.forEach(walk);
+      }
+    };
+    walk(el);
+    return parts.join(' ');
+  }
+
   // Outlook (outlook.office.com / outlook.cloud.microsoft) doesn't render a Teams-style
   // toast element for new mail. Instead it updates a div[data-app-section="NotificationPane"]
-  // aria-live region with the new message's full row text (sender, subject, preview) for
-  // screen readers — that's the only reliable hook available for "new mail arrived".
+  // aria-live region with the announcement text (new message row, reminder popup, etc.) for
+  // screen readers — that's the only reliable hook available for these events.
   function setupOutlookNotificationObserver(area) {
     let lastText = '';
+    const TITLE_LENGTH = 60;
 
     const observer = new MutationObserver(() => {
-      const raw = area.textContent;
+      const raw = extractSpacedText(area);
       if (!raw || raw === lastText) return;
       lastText = raw;
 
-      const lines = raw.split(/\r?\n/).map(cleanAnnouncedText).filter(Boolean);
-      if (!lines.length) return;
+      const cleaned = cleanAnnouncedText(raw);
+      if (!cleaned) return;
 
       throttledSendNotification({
-        title: lines[0].slice(0, 120),
-        body: (lines.slice(1).join(' ') || lines[0]).slice(0, 200)
+        title: cleaned.slice(0, TITLE_LENGTH),
+        body: cleaned.length > TITLE_LENGTH ? cleaned.slice(TITLE_LENGTH, TITLE_LENGTH + 200) : cleaned
       });
     });
 
