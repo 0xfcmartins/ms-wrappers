@@ -184,6 +184,15 @@ contextBridge.exposeInMainWorld('electron', {
         return (isControl || isPUA) ? ' ' : ch;
       })
       .join('')
+      // extractSpacedText below inserts a space between DOM leaf text nodes, but
+      // some boundaries (e.g. an avatar's initials rendered via CSS content, or
+      // other non-text-node sources) still come through with no gap at all —
+      // reported as e.g. "JSJim SmithInstall SnapsHiPaul,". Insert a space at
+      // any lowercase→uppercase boundary (covers "SmithInstall", "tudoDaily",
+      // "ExternoEsta", ...) and at a short ALL-CAPS run followed by a Titlecase
+      // word (covers "JSJim" specifically, where both sides start uppercase).
+      .replace(/([a-zà-ÿ0-9)])([A-ZÀ-Ý])/g, '$1 $2')
+      .replace(/\b([A-ZÀ-Ý]{2,3})([A-ZÀ-Ý][a-zà-ÿ])/g, '$1 $2')
       .replace(/\s+/g, ' ')
       .trim();
   }
@@ -222,10 +231,16 @@ contextBridge.exposeInMainWorld('electron', {
   // word-boundary truncation when that separator isn't present (e.g. internal
   // senders may not get a flag at all).
   function splitMailAnnouncement(cleaned, maxTitleLength) {
-    const dotIndex = cleaned.indexOf(' · ');
+    // Avatar initials are always uppercase (e.g. "FM", "NN"); a real short first
+    // name like "Zé"/"Rui"/"Ana" has lowercase letters and must survive here.
+    // Applied unconditionally (both branches below), not just when a category/
+    // flag separator is present.
+    const withoutInitials = cleaned.replace(/^[A-ZÀ-Ú]{1,3}\s+/, '') || cleaned;
+
+    const dotIndex = withoutInitials.indexOf(' · ');
     if (dotIndex === -1) {
-      const title = truncateAtWord(cleaned, maxTitleLength);
-      const body = cleaned.length > title.length ? cleaned.slice(title.length).trim() : title;
+      const title = truncateAtWord(withoutInitials, maxTitleLength);
+      const body = withoutInitials.length > title.length ? withoutInitials.slice(title.length).trim() : title;
       return {title, body};
     }
 
@@ -233,25 +248,22 @@ contextBridge.exposeInMainWorld('electron', {
     // be — most mail has no category/flag at all, so blindly popping/shifting a
     // word would just as often eat real subject/preview text instead.
     const KNOWN_FLAGS = ['externo', 'external', 'interno', 'internal'];
-    const beforeWords = cleaned.slice(0, dotIndex).trim().split(' ');
+    const beforeWords = withoutInitials.slice(0, dotIndex).trim().split(' ');
     const lastBeforeWord = beforeWords[beforeWords.length - 1] || '';
     if (/^[A-ZÀ-Ú]{2,}$/.test(lastBeforeWord)) {
       beforeWords.pop(); // looks like an all-caps category label (e.g. "INFORMATIVO")
     }
-    const afterWords = cleaned.slice(dotIndex + 3).trim().split(' ');
+    const afterWords = withoutInitials.slice(dotIndex + 3).trim().split(' ');
     const firstAfterWord = afterWords[0] || '';
     if (KNOWN_FLAGS.includes(firstAfterWord.toLowerCase())) {
       afterWords.shift(); // known flag label (e.g. "Externo")
     }
 
-    let nameAndSubject = beforeWords.join(' ').trim();
-    // Avatar initials are always uppercase (e.g. "FM", "NN"); a real short first
-    // name like "Zé"/"Rui"/"Ana" has lowercase letters and must survive here.
-    nameAndSubject = nameAndSubject.replace(/^[A-ZÀ-Ú]{1,3}\s+/, '');
+    const nameAndSubject = beforeWords.join(' ').trim();
     const preview = afterWords.join(' ').trim();
 
     return {
-      title: nameAndSubject.slice(0, maxTitleLength) || truncateAtWord(cleaned, maxTitleLength),
+      title: nameAndSubject.slice(0, maxTitleLength) || truncateAtWord(withoutInitials, maxTitleLength),
       body: preview || nameAndSubject
     };
   }
