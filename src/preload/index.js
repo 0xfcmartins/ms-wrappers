@@ -158,6 +158,14 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.send('new-notification', data);
   }, 500);
 
+  // Separate throttle instance for the window.Notification interceptor below:
+  // it runs independently of the DOM-based observers above, and sharing one
+  // throttle meant a real notification from one path could silently swallow one
+  // from the other if they fired within the same 500ms window.
+  const throttledSendNativeNotification = throttle((data) => {
+    ipcRenderer.send('new-notification', data);
+  }, 500);
+
   // Strip icon-font placeholder glyphs (Private Use Area) and control chars mixed
   // into Outlook's screen-reader announcement text. Filtered by code point rather
   // than a \u-escape regex, since that form has previously been mangled into raw
@@ -221,13 +229,25 @@ contextBridge.exposeInMainWorld('electron', {
       return {title, body};
     }
 
+    // Only drop these when they actually look like the label they're assumed to
+    // be — most mail has no category/flag at all, so blindly popping/shifting a
+    // word would just as often eat real subject/preview text instead.
+    const KNOWN_FLAGS = ['externo', 'external', 'interno', 'internal'];
     const beforeWords = cleaned.slice(0, dotIndex).trim().split(' ');
-    beforeWords.pop(); // drop the category label (e.g. "INFORMATIVO")
+    const lastBeforeWord = beforeWords[beforeWords.length - 1] || '';
+    if (/^[A-ZÀ-Ú]{2,}$/.test(lastBeforeWord)) {
+      beforeWords.pop(); // looks like an all-caps category label (e.g. "INFORMATIVO")
+    }
     const afterWords = cleaned.slice(dotIndex + 3).trim().split(' ');
-    afterWords.shift(); // drop the flag label (e.g. "Externo")
+    const firstAfterWord = afterWords[0] || '';
+    if (KNOWN_FLAGS.includes(firstAfterWord.toLowerCase())) {
+      afterWords.shift(); // known flag label (e.g. "Externo")
+    }
 
     let nameAndSubject = beforeWords.join(' ').trim();
-    nameAndSubject = nameAndSubject.replace(/^\S{1,3}\s+/, ''); // drop leading avatar initials
+    // Avatar initials are always uppercase (e.g. "FM", "NN"); a real short first
+    // name like "Zé"/"Rui"/"Ana" has lowercase letters and must survive here.
+    nameAndSubject = nameAndSubject.replace(/^[A-ZÀ-Ú]{1,3}\s+/, '');
     const preview = afterWords.join(' ').trim();
 
     return {
@@ -380,7 +400,7 @@ contextBridge.exposeInMainWorld('electron', {
     document.addEventListener('outlook-ew-notification', (event) => {
       const detail = (event && event.detail) || {};
       console.log('🔔 [OutlookNotify] Intercepted native Notification call:', detail.title);
-      throttledSendNotification({
+      throttledSendNativeNotification({
         title: detail.title || 'Outlook',
         body: detail.body || ''
       });
