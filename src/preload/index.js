@@ -305,6 +305,57 @@ contextBridge.exposeInMainWorld('electron', {
     setupNotificationObserver();
   });
 
+  // Second, independent detection path (running alongside the DOM observer above
+  // while both are being evaluated): intercept window.Notification itself. Under
+  // contextIsolation this preload's `window` is a separate JS realm from the
+  // page's, so overriding window.Notification here has no effect on the page —
+  // it has to be done by injecting a real <script> tag, which runs in the page's
+  // own world. That script can't call back into this preload's functions
+  // directly either, so it reports back via a CustomEvent on `document`, which
+  // (unlike `window`) is one of the few objects actually shared between worlds.
+  function setupNotificationApiInterceptor() {
+    const script = document.createElement('script');
+    script.textContent = `(function() {
+      if (window.__outlookEwNotifyPatched) return;
+      window.__outlookEwNotifyPatched = true;
+      function PatchedNotification(title, options) {
+        try {
+          document.dispatchEvent(new CustomEvent('outlook-ew-notification', {
+            detail: { title: String(title || ''), body: (options && options.body) || '' }
+          }));
+        } catch (e) {}
+        this.title = title;
+        this.body = options && options.body;
+        this.onclick = null;
+        this.onerror = null;
+        this.close = function() {};
+        this.addEventListener = function() {};
+      }
+      PatchedNotification.permission = 'granted';
+      PatchedNotification.requestPermission = function(cb) {
+        if (cb) cb('granted');
+        return Promise.resolve('granted');
+      };
+      window.Notification = PatchedNotification;
+      console.log('🔔 [OutlookNotify] window.Notification patched in page context');
+    })();`;
+    (document.documentElement || document.head || document.body).appendChild(script);
+    script.remove();
+
+    document.addEventListener('outlook-ew-notification', (event) => {
+      const detail = (event && event.detail) || {};
+      console.log('🔔 [OutlookNotify] Intercepted native Notification call:', detail.title);
+      throttledSendNotification({
+        title: detail.title || 'Outlook',
+        body: detail.body || ''
+      });
+    });
+  }
+
+  // Inject as early as possible (before the page's own scripts run) so we patch
+  // window.Notification before anything can cache a reference to the original.
+  setupNotificationApiInterceptor();
+
 } catch (error) {
   console.error('❌ Error executing preload script:', error);
 }
