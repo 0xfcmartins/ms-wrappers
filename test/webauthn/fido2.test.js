@@ -3,10 +3,12 @@ const assert = require('node:assert/strict');
 const crypto = require('crypto');
 const path = require('path');
 
-// The fake fido2-tools must win over any real ones installed on the machine.
-process.env.PATH = `${path.join(__dirname, 'fake-bin')}${path.delimiter}${process.env.PATH}`;
-
 const fido2 = require('../../src/main/webauthn/fido2');
+
+const FAKE_BIN = path.join(__dirname, 'fake-bin');
+
+// The fake fido2-tools replace any real ones installed on the machine.
+test.beforeEach(() => fido2.setToolDirectories([FAKE_BIN]));
 
 const ORIGIN = 'https://login.microsoft.com';
 const CHALLENGE = crypto.randomBytes(32);
@@ -114,4 +116,20 @@ test('a key without credentials for the RP is reported as such', async () => {
 test('ceremonies for other origins or foreign RP IDs never reach the key', async () => {
     await assert.rejects(fido2.getAssertion(request(), 'https://outlook.office.com', '1234'), {code: 'ORIGIN'});
     await assert.rejects(fido2.getAssertion(request({rpId: 'example.com'}), ORIGIN, '1234'), {code: 'RP_ID'});
+});
+
+test('the tools are never resolved through PATH', async () => {
+    const savedPath = process.env.PATH;
+    process.env.PATH = `${FAKE_BIN}${path.delimiter}${savedPath}`;
+    try {
+        fido2.setToolDirectories([path.join(__dirname, 'no-such-dir')]);
+        assert.equal(fido2.isAvailable(), false);
+        await assert.rejects(fido2.getAssertion(request(), ORIGIN, '1234'), {code: 'SPAWN'});
+    } finally {
+        process.env.PATH = savedPath;
+    }
+});
+
+test('the tools are available once found in a fixed directory', () => {
+    assert.equal(fido2.isAvailable(), true);
 });

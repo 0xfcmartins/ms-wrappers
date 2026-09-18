@@ -7,14 +7,14 @@
     try {
         const creds = navigator.credentials;
         if (creds) {
-            const get = creds.get && creds.get.bind(creds);
-            const create = creds.create && creds.create.bind(creds);
+            const get = creds.get?.bind(creds);
+            const create = creds.create?.bind(creds);
             const unsupported = () => Promise.reject(
                 new DOMException('WebAuthn is not implemented in Electron', 'NotSupportedError'));
 
             // Only public-key requests are refused; password credentials keep working.
-            creds.get = (options) => (options && options.publicKey) ? unsupported() : get(options);
-            creds.create = (options) => (options && options.publicKey) ? unsupported() : create(options);
+            creds.get = (options) => options?.publicKey ? unsupported() : get(options);
+            creds.create = (options) => options?.publicKey ? unsupported() : create(options);
         }
 
         delete window.PublicKeyCredential;

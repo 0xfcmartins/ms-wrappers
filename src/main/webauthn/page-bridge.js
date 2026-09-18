@@ -29,16 +29,20 @@
     const toBase64Url = (source) => {
         let binary = '';
         for (const byte of toBytes(source)) {
-            binary += String.fromCharCode(byte);
+            binary += String.fromCodePoint(byte);
         }
-        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+        let encoded = btoa(binary).replaceAll('+', '-').replaceAll('/', '_');
+        while (encoded.endsWith('=')) {
+            encoded = encoded.slice(0, -1);
+        }
+        return encoded;
     };
 
     const fromBase64Url = (text) => {
-        const binary = atob(text.replace(/-/g, '+').replace(/_/g, '/'));
+        const binary = atob(text.replaceAll('-', '+').replaceAll('_', '/'));
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) {
-            bytes[i] = binary.charCodeAt(i);
+            bytes[i] = binary.codePointAt(i);
         }
         return bytes.buffer;
     };
@@ -87,14 +91,14 @@
     const nativeCreate = creds.create.bind(creds);
 
     creds.get = (options) => {
-        if (!options || !options.publicKey) {
+        if (!options?.publicKey) {
             return nativeGet(options);
         }
         // No autofill UI to offer: isConditionalMediationAvailable() reports false.
         if (options.mediation === 'conditional') {
             return fail('NotSupportedError', 'Conditional mediation is not supported');
         }
-        if (options.signal && options.signal.aborted) {
+        if (options.signal?.aborted) {
             return fail('AbortError', 'The operation was aborted');
         }
 
@@ -132,7 +136,7 @@
     };
 
     // Registration stays unsupported: enrol keys from a regular browser.
-    creds.create = (options) => (options && options.publicKey)
+    creds.create = (options) => options?.publicKey
         ? fail('NotSupportedError', 'Security key registration is not supported in this app')
         : nativeCreate(options);
 

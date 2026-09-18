@@ -1,7 +1,7 @@
 // Wires FIDO2 security-key sign-in into the app: chooses the page script each preload
 // injects, and runs navigator.credentials.get() ceremonies behind a PIN / touch dialog.
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 const {BrowserWindow} = require('electron');
 const fido2 = require('./fido2');
 
@@ -25,9 +25,10 @@ const FATAL_ERRORS = {
 };
 
 class KeyDialog {
+    pending = null;
+    closed = false;
+
     constructor(parent) {
-        this.pending = null;
-        this.closed = false;
         this.window = new BrowserWindow({
             parent: parent || undefined,
             modal: !!parent,

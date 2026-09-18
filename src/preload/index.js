@@ -11,12 +11,12 @@ try {
   const { webFrame, contextBridge, ipcRenderer } = require('electron');
   const webauthn = ipcRenderer.sendSync('webauthn-page-script', window.location.origin);
 
-  if (webauthn && webauthn.bridge) {
+  if (webauthn?.bridge) {
     contextBridge.exposeInMainWorld('__ewFido2', {
       get: (request) => ipcRenderer.invoke('webauthn-get', request),
     });
   }
-  if (webauthn && webauthn.script) {
+  if (webauthn?.script) {
     webFrame.executeJavaScript(webauthn.script);
   }
 } catch (error) {

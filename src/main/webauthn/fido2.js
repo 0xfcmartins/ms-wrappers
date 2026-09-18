@@ -6,11 +6,11 @@
 // override (page-bridge.js) hands the result back to the sign-in page.
 //
 // Pure helpers are exported for the unit tests; nothing here touches Electron.
-const crypto = require('crypto');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
-const {spawn, spawnSync} = require('child_process');
+const crypto = require('node:crypto');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const {spawn} = require('node:child_process');
 
 // Sign-in origins allowed to run a ceremony. Anything else keeps the neutralized API.
 const ALLOWED_ORIGINS = new Set([
@@ -171,17 +171,24 @@ class Fido2Error extends Error {
     }
 }
 
-let toolsAvailable = null;
+// The tools are looked up in fixed system directories (the snap's own first), never
+// through PATH, which the user's environment controls.
+let toolDirectories = [
+    process.env.SNAP && path.join(process.env.SNAP, 'usr', 'bin'),
+    '/usr/bin',
+    '/usr/local/bin',
+].filter(Boolean);
+
+function setToolDirectories(directories) {
+    toolDirectories = directories;
+}
+
+function toolPath(name) {
+    return toolDirectories.map(dir => path.join(dir, name)).find(file => fs.existsSync(file)) || null;
+}
 
 function isAvailable() {
-    if (toolsAvailable === null) {
-        const probe = spawnSync('fido2-token', ['-L'], {timeout: 5000, stdio: 'ignore'});
-        toolsAvailable = !probe.error;
-        if (!toolsAvailable) {
-            console.info('[WebAuthn] fido2-tools not found; security keys disabled:', probe.error.message);
-        }
-    }
-    return toolsAvailable;
+    return toolPath('fido2-token') !== null && toolPath('fido2-assert') !== null;
 }
 
 // Runs a fido2-tools command. The PIN goes to stdin: the tools read it from the
@@ -189,7 +196,12 @@ function isAvailable() {
 // (detached) to guarantee it has none, even when the app was launched from a shell.
 function run(command, args, {pin = null, timeout = DEFAULT_TIMEOUT_MS} = {}) {
     return new Promise((resolve, reject) => {
-        const child = spawn(command, args, {detached: true, stdio: ['pipe', 'pipe', 'pipe']});
+        const executable = toolPath(command);
+        if (!executable) {
+            reject(new Fido2Error(`${command} not found`, 'SPAWN'));
+            return;
+        }
+        const child = spawn(executable, args, {detached: true, stdio: ['pipe', 'pipe', 'pipe']});
         let stdout = '';
         let stderr = '';
         const timer = setTimeout(() => {
@@ -309,5 +321,6 @@ module.exports = {
     parseResidentCredentials,
     rpIdMatchesOrigin,
     selectCredentials,
+    setToolDirectories,
     unwrapCborByteString,
 };
