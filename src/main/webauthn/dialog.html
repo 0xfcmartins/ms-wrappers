@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+    <title>Security key</title>
+    <link rel="stylesheet" href="dialog.css">
+</head>
+<body>
+    <h1>Sign in with your security key</h1>
+    <p id="message">Enter your security key PIN.</p>
+    <form id="form">
+        <input id="pin" type="password" autocomplete="off" maxlength="63" aria-label="PIN">
+        <div class="buttons">
+            <button type="button" id="cancel">Cancel</button>
+            <button type="submit" id="submit">Continue</button>
+        </div>
+    </form>
+    <script src="dialog.js"></script>
+</body>
+</html>

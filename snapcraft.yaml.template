@@ -46,6 +46,8 @@ apps:
         - mount-observe
         - network-status
         - login-session-observe
+        # FIDO2 security keys (hidraw access for fido2-tools)
+        - u2f-devices
 
 parts:
   application:
@@ -73,6 +75,7 @@ parts:
       - libdrm2
       - libatspi2.0-0
       - libgdk-pixbuf2.0-0
+      - fido2-tools
     override-build: |
       snapcraftctl build
       mkdir -p $SNAPCRAFT_PART_INSTALL/app

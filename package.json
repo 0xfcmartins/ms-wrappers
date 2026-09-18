@@ -12,7 +12,8 @@
     "build:spotify": "node build.js spotify",
     "dev:teams": "node dev-run.js teams",
     "dev:outlook": "node dev-run.js outlook",
-    "dev:spotify": "node dev-run.js spotify"
+    "dev:spotify": "node dev-run.js spotify",
+    "test": "node --test test/**/*.test.js"
   },
   "homepage": "https://github.com/0xfcmartins/teams-ew",
   "author": {

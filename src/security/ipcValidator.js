@@ -58,6 +58,11 @@ const allowedChannels = new Set([
   // Custom backgrounds
   'get-custom-bg-list',
   
+  // FIDO2 security keys
+  'webauthn-page-script',
+  'webauthn-get',
+  'webauthn-dialog',
+
   // Connection management
   'offline-retry',
   'stop-sharing',

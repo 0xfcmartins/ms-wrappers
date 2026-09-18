@@ -1,3 +1,28 @@
+// WebAuthn. Electron ships no WebAuthn transport (electron/electron#24573): left alone,
+// navigator.credentials.get({publicKey}) never settles and Entra's sign-in deadlocks.
+// The main process picks the script to inject: on Microsoft sign-in pages with fido2-tools
+// installed, a bridge that drives the security key; everywhere else, a neutralization
+// that makes the server fall back to another method.
+//
+// webFrame.executeJavaScript() from a preload runs in the MAIN world, before page
+// scripts, and works with contextIsolation: true. This block must stay first and only
+// require 'electron': the preload is sandboxed.
+try {
+  const { webFrame, contextBridge, ipcRenderer } = require('electron');
+  const webauthn = ipcRenderer.sendSync('webauthn-page-script', window.location.origin);
+
+  if (webauthn?.bridge) {
+    contextBridge.exposeInMainWorld('__ewFido2', {
+      get: (request) => ipcRenderer.invoke('webauthn-get', request),
+    });
+  }
+  if (webauthn?.script) {
+    webFrame.executeJavaScript(webauthn.script);
+  }
+} catch (error) {
+  console.error('[WebAuthn] Could not set up WebAuthn handling:', error);
+}
+
 try {
   const { contextBridge, ipcRenderer } = require('electron');
 
