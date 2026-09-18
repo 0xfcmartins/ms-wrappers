@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'">
+    <title>Security key</title>
+    <style>
+        :root { color-scheme: light dark; }
+        body { font: 14px system-ui, sans-serif; margin: 0; padding: 20px 24px; }
+        h1 { font-size: 16px; margin: 0 0 12px; }
+        p { margin: 0 0 12px; min-height: 1.2em; }
+        #message.error { color: #c42b1c; }
+        input { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 14px; }
+        .buttons { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+        button { padding: 6px 16px; font-size: 14px; }
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+    <h1>Sign in with your security key</h1>
+    <p id="message">Enter your security key PIN.</p>
+    <form id="form">
+        <input id="pin" type="password" autocomplete="off" maxlength="63" aria-label="PIN" autofocus>
+        <div class="buttons">
+            <button type="button" id="cancel">Cancel</button>
+            <button type="submit" id="submit">Continue</button>
+        </div>
+    </form>
+    <script src="dialog.js"></script>
+</body>
+</html>
