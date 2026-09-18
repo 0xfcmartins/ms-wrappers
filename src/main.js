@@ -238,6 +238,40 @@ if (!gotTheLock) {
         }
     });
 
+    // Electron exposes no navigation UI and this app calls removeMenu(), so without these
+    // helpers any page that dead-ends - an authentication step the wrapper cannot complete,
+    // an error page - is an inescapable block. navigationHistory is Electron >= 32; the
+    // legacy methods stay as a fallback.
+    function canGoBack(wc) {
+        return wc.navigationHistory ? wc.navigationHistory.canGoBack() : wc.canGoBack();
+    }
+
+    function canGoForward(wc) {
+        return wc.navigationHistory ? wc.navigationHistory.canGoForward() : wc.canGoForward();
+    }
+
+    function goBack(wc) {
+        if (!canGoBack(wc)) {
+            return;
+        }
+        if (wc.navigationHistory) {
+            wc.navigationHistory.goBack();
+        } else {
+            wc.goBack();
+        }
+    }
+
+    function goForward(wc) {
+        if (!canGoForward(wc)) {
+            return;
+        }
+        if (wc.navigationHistory) {
+            wc.navigationHistory.goForward();
+        } else {
+            wc.goForward();
+        }
+    }
+
     function setupZoomControls(window) {
 
         const zoomIn = () => {
@@ -262,6 +296,20 @@ if (!gotTheLock) {
         global.resetZoom = resetZoom;
 
         window.webContents.on('before-input-event', (event, input) => {
+            // History navigation: the only keyboard escape from a dead-end page.
+            if (input.type === 'keyDown' && input.alt && !input.control && !input.meta) {
+                if (input.key === 'ArrowLeft') {
+                    event.preventDefault();
+                    goBack(window.webContents);
+                    return;
+                }
+                if (input.key === 'ArrowRight') {
+                    event.preventDefault();
+                    goForward(window.webContents);
+                    return;
+                }
+            }
+
             // DevTools shortcut
             if ((input.control || input.meta) && input.shift && input.key.toLowerCase() === 'i') {
                 if (input.type === 'keyDown') {
@@ -379,6 +427,11 @@ if (!gotTheLock) {
                 }
             );
 
+            // setUserAgent() only affects this webContents: authentication pop-ups opened
+            // through setWindowOpenHandler fall back to the session default, which announces
+            // "<snapName>/<version> ... Electron/<version>" to Microsoft's sign-in stack.
+            // Pin it on the session so every webContents in it agrees.
+            targetSession.setUserAgent(appConfig.userAgent);
             mainWindow.webContents.setUserAgent(appConfig.userAgent);
             mainWindow.webContents.session.setPermissionRequestHandler((webContents, permission, callback) => {
                 console.log(`Permission requested: ${permission}`);
@@ -492,10 +545,20 @@ if (!gotTheLock) {
                         { type: 'separator' },
                         { role: 'selectAll' },
                     );
-                } else {
-                    // No relevant action — do not show menu
-                    return;
                 }
+
+                // Always offer navigation. Previously this handler returned without showing
+                // anything when nothing was editable and nothing selected - which is exactly
+                // the state of a stuck authentication page, leaving no affordance at all.
+                const wc = mainWindow.webContents;
+                if (template.length > 0) {
+                    template.push({ type: 'separator' });
+                }
+                template.push(
+                    { label: 'Back', enabled: canGoBack(wc), click: () => goBack(wc) },
+                    { label: 'Forward', enabled: canGoForward(wc), click: () => goForward(wc) },
+                    { label: 'Reload', click: () => wc.reload() },
+                );
 
                 const menu = Menu.buildFromTemplate(template);
                 menu.popup({ window: mainWindow });

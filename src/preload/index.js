@@ -1,3 +1,41 @@
+// Electron ships no WebAuthn implementation (electron/electron#24573, #15404).
+// window.PublicKeyCredential is nevertheless defined, so Entra advertises passkey /
+// Windows Hello as available and may auto-select it under a phishing-resistant policy.
+// The ceremony is then dispatched to a browser process that cannot handle it:
+// navigator.credentials.get({publicKey}) never settles - not even after its own
+// `timeout` - and the sign-in page deadlocks with its own "Back" control inert.
+// Advertise the truth so the server falls back to a method this build can complete.
+//
+// webFrame.executeJavaScript() from a preload runs in the MAIN world, before page
+// scripts, and works with contextIsolation: true.
+try {
+  const { webFrame } = require('electron');
+
+  webFrame.executeJavaScript(`(() => {
+    try {
+      const creds = navigator.credentials;
+      if (creds) {
+        const get = creds.get && creds.get.bind(creds);
+        const create = creds.create && creds.create.bind(creds);
+        const unsupported = () => Promise.reject(
+          new DOMException('WebAuthn is not implemented in Electron', 'NotSupportedError'));
+
+        // Only public-key requests are refused; password credentials keep working.
+        creds.get = (options) => (options && options.publicKey) ? unsupported() : get(options);
+        creds.create = (options) => (options && options.publicKey) ? unsupported() : create(options);
+      }
+
+      delete window.PublicKeyCredential;
+      delete window.AuthenticatorAssertionResponse;
+      delete window.AuthenticatorAttestationResponse;
+    } catch (e) {
+      // Never block page start-up over this.
+    }
+  })();`);
+} catch (error) {
+  console.error('[WebAuthn] Could not neutralize the unsupported WebAuthn API:', error);
+}
+
 try {
   const { contextBridge, ipcRenderer } = require('electron');
 
