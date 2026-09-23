@@ -1,39 +1,26 @@
-// Electron ships no WebAuthn implementation (electron/electron#24573, #15404).
-// window.PublicKeyCredential is nevertheless defined, so Entra advertises passkey /
-// Windows Hello as available and may auto-select it under a phishing-resistant policy.
-// The ceremony is then dispatched to a browser process that cannot handle it:
-// navigator.credentials.get({publicKey}) never settles - not even after its own
-// `timeout` - and the sign-in page deadlocks with its own "Back" control inert.
-// Advertise the truth so the server falls back to a method this build can complete.
+// WebAuthn. Electron ships no WebAuthn transport (electron/electron#24573): left alone,
+// navigator.credentials.get({publicKey}) never settles and Entra's sign-in deadlocks.
+// The main process picks the script to inject: on Microsoft sign-in pages with fido2-tools
+// installed, a bridge that drives the security key; everywhere else, a neutralization
+// that makes the server fall back to another method.
 //
 // webFrame.executeJavaScript() from a preload runs in the MAIN world, before page
-// scripts, and works with contextIsolation: true.
+// scripts, and works with contextIsolation: true. This block must stay first and only
+// require 'electron': the preload is sandboxed.
 try {
-  const { webFrame } = require('electron');
+  const { webFrame, contextBridge, ipcRenderer } = require('electron');
+  const webauthn = ipcRenderer.sendSync('webauthn-page-script', window.location.origin);
 
-  webFrame.executeJavaScript(`(() => {
-    try {
-      const creds = navigator.credentials;
-      if (creds) {
-        const get = creds.get && creds.get.bind(creds);
-        const create = creds.create && creds.create.bind(creds);
-        const unsupported = () => Promise.reject(
-          new DOMException('WebAuthn is not implemented in Electron', 'NotSupportedError'));
-
-        // Only public-key requests are refused; password credentials keep working.
-        creds.get = (options) => (options && options.publicKey) ? unsupported() : get(options);
-        creds.create = (options) => (options && options.publicKey) ? unsupported() : create(options);
-      }
-
-      delete window.PublicKeyCredential;
-      delete window.AuthenticatorAssertionResponse;
-      delete window.AuthenticatorAttestationResponse;
-    } catch (e) {
-      // Never block page start-up over this.
-    }
-  })();`);
+  if (webauthn?.bridge) {
+    contextBridge.exposeInMainWorld('__ewFido2', {
+      get: (request) => ipcRenderer.invoke('webauthn-get', request),
+    });
+  }
+  if (webauthn?.script) {
+    webFrame.executeJavaScript(webauthn.script);
+  }
 } catch (error) {
-  console.error('[WebAuthn] Could not neutralize the unsupported WebAuthn API:', error);
+  console.error('[WebAuthn] Could not set up WebAuthn handling:', error);
 }
 
 try {

@@ -73,6 +73,19 @@ Run the applications directly using Electron:
     # Run Outlook
     npm run run:outlook
 ```
+## Security keys (FIDO2)
+Electron has no WebAuthn transport on Linux, so Microsoft sign-in pages that ask for a
+security key would hang. On `login.microsoftonline.com`, `login.microsoft.com` and
+`login.live.com`, the wrapper performs the sign-in itself through Yubico's `fido2-tools`
+(`fido2-token` / `fido2-assert`), behind a PIN / touch dialog:
+
+- **Requirements:** `fido2-tools` on the host for `.deb` / dev runs (`sudo apt install fido2-tools`);
+  the snap stages it and uses the `u2f-devices` interface.
+- **Scope:** sign-in (assertion) only. Registering a new key must be done in a regular browser.
+- **Fallback:** without `fido2-tools`, or on any other page, WebAuthn is hidden from the page so
+  the server offers another method (Authenticator, SMS, ...).
+- **Tests:** `npm test` (uses fake `fido2-tools` from `test/webauthn/fake-bin`).
+
 ## Project Structure
 ``` 
     .

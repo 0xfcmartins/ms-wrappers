@@ -31,6 +31,7 @@ const windowStateKeeper = require('electron-window-state');
 const {validateIpcChannel, allowedChannels} = require('./security/ipcValidator');
 const screenShare = require('./main/screenShare');
 const {applyEnvironment} = require('./main/environment');
+const {registerWebAuthn} = require('./main/webauthn');
 
 // Enhanced error handling
 function setupGlobalErrorHandling() {
@@ -953,6 +954,9 @@ if (!gotTheLock) {
 
             // IPC Handlers for screen sharing and preview management
             setupScreenSharingIpcHandlers();
+
+            // FIDO2 security keys on sign-in pages; must be registered before any page loads
+            registerWebAuthn(ipcMain);
 
             // Request media access early on macOS to avoid mid-call prompts
             if (process.platform === 'darwin') {

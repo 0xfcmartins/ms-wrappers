@@ -1,0 +1,11 @@
+#!/bin/sh
+# Stand-in for fido2-assert -G -v -i <file> <device>: echoes the input back as an assertion.
+input="$4"
+read -r pin
+[ "$pin" = "1234" ] || { echo "fido2-assert: fido_dev_get_assert: FIDO_ERR_PIN_INVALID" >&2; exit 1; }
+[ "$(sed -n 3p "$input")" = "q83vASNFZ4k=" ] || { echo "fido2-assert: FIDO_ERR_NO_CREDENTIALS" >&2; exit 1; }
+sed -n 1p "$input"
+sed -n 2p "$input"
+# CBOR byte string (0x58 0x25) wrapping 37 bytes of authenticator data.
+printf 'WCUAAQIDBAUGBwgJCgsMDQ4PEBESExQVFhcYGRobHB0eHyAhIiMk\n'
+echo "MEUCIQDsaWduYXR1cmU="
